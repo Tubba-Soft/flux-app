@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "NetFlow Studio",
+  "version": "1.0.0",
+  "identifier": "com.netflowstudio.desktop",
+  "build": {
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "NetFlow Studio - Bandwidth Controller & Traffic Shaper",
+        "url": "index.html",
+        "width": 1320,
+        "height": 860,
+        "minWidth": 980,
+        "minHeight": 650,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false
+      },
+      {
+        "label": "widget",
+        "title": "NetFlow Speed Widget",
+        "url": "index.html#widget",
+        "width": 215,
+        "height": 38,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "shadow": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ]
+  }
+}

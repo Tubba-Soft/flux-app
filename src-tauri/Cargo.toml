@@ -1,0 +1,45 @@
+[package]
+name = "netflow-studio"
+version = "1.0.0"
+description = "NetFlow Studio - Granular Windows Network Monitor & Traffic Shaper by Tubba-Soft"
+authors = ["Tubba-Soft Team - Amjad Alwan <https://github.com/Tubba-Soft>"]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/Tubba-Soft/netflow-studio"
+homepage = "https://github.com/Tubba-Soft/netflow-studio"
+
+
+[build-dependencies]
+tauri-build = { version = "2.0", default-features = false , features = [] }
+
+[dependencies]
+tauri = { version = "2.2", features = ["tray-icon"] }
+tauri-plugin-shell = "2.2"
+tauri-plugin-notification = "2.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.40", features = ["full"] }
+parking_lot = "0.12"
+dashmap = "6.1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+base64 = "0.22"
+image = { version = "0.25", default-features = false, features = ["png"] }
+libloading = "0.8"
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.11"
+
+[target.'cfg(windows)'.dependencies.windows-sys]
+version = "0.59"
+features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_Networking_WinSock",
+    "Win32_System_Threading",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_Security"
+]

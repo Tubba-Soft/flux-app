@@ -1,0 +1,5 @@
+[registries.crates-io]
+protocol = "sparse"
+
+[build]
+target-dir = "C:/Users/amjad/.cargo_target/netflow_studio"
