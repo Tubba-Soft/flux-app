@@ -148,27 +148,46 @@ fn get_autostart() -> bool {
 fn set_autostart(enabled: bool) -> Result<(), String> {
     if enabled {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let tr_val = format!("\"{}\" --minimized", exe.to_string_lossy());
-        let status = std::process::Command::new("schtasks")
-            .args([
-                "/create",
-                "/tn",
-                "NetFlowStudio_Autostart",
-                "/tr",
-                &tr_val,
-                "/sc",
-                "onlogon",
-                "/rl",
-                "highest",
-                "/f",
-            ])
+        let exe_path = exe.to_string_lossy().to_string();
+
+        // Use PowerShell Register-ScheduledTask for a robust autostart with admin + minimized
+        let ps_script = format!(
+            r#"
+            try {{
+                $action = New-ScheduledTaskAction -Execute '{}' -Argument '--minimized'
+                $trigger = New-ScheduledTaskTrigger -AtLogOn
+                $principal = New-ScheduledTaskPrincipal -UserId (whoami) -RunLevel Highest -LogonType Interactive
+                $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero)
+                Unregister-ScheduledTask -TaskName 'NetFlowStudio_Autostart' -Confirm:$false -ErrorAction SilentlyContinue
+                Register-ScheduledTask -TaskName 'NetFlowStudio_Autostart' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description 'NetFlow Studio - Auto-start minimized with admin privileges' -Force
+                exit 0
+            }} catch {{
+                exit 1
+            }}
+            "#,
+            exe_path
+        );
+
+        let status = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
             .status()
             .map_err(|e| e.to_string())?;
 
         if status.success() {
             Ok(())
         } else {
-            Err("Failed to register scheduled task for elevated autostart".to_string())
+            // Fallback to schtasks if PowerShell method fails
+            let tr_val = format!("\"{}\" --minimized", exe_path);
+            let fallback = std::process::Command::new("schtasks")
+                .args(["/create", "/tn", "NetFlowStudio_Autostart", "/tr", &tr_val, "/sc", "onlogon", "/rl", "highest", "/f"])
+                .status()
+                .map_err(|e| e.to_string())?;
+
+            if fallback.success() {
+                Ok(())
+            } else {
+                Err("Failed to register autostart task".to_string())
+            }
         }
     } else {
         let _ = std::process::Command::new("schtasks")
@@ -552,6 +571,9 @@ fn enforce_single_instance() -> bool {
 }
 
 fn main() {
+    // Detect --minimized flag for silent autostart (hidden to system tray)
+    let start_minimized = std::env::args().any(|a| a == "--minimized");
+
     #[cfg(windows)]
     {
         if !enforce_single_instance() {
@@ -695,6 +717,14 @@ fn main() {
                 if show_widget {
                     let _ = widget.show();
                     let _ = widget.set_always_on_top(true);
+                }
+            }
+
+            // If launched with --minimized (autostart), hide main window to system tray
+            if start_minimized {
+                info!("[Autostart] Starting minimized to system tray...");
+                if let Some(main_win) = app.get_webview_window("main") {
+                    let _ = main_win.hide();
                 }
             }
 

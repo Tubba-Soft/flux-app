@@ -17,6 +17,30 @@ if (Test-Path $wv2AdminLock) {
     Remove-Item $wv2AdminLock -Force -ErrorAction SilentlyContinue
 }
 
+# 4. إضافة استثناء Windows Defender لمنع الحذف الخاطئ لملفات WinDivert
+#    (يتطلب صلاحيات مسؤول - يتم تشغيل هذا السكريبت كمسؤول أصلاً)
+Write-Host ""
+Write-Host "=================================================" -ForegroundColor Cyan
+Write-Host " NetFlow Studio - إعداد استثناء Windows Defender" -ForegroundColor Yellow
+Write-Host "=================================================" -ForegroundColor Cyan
+
+$exclusionPaths = @($binDir, "$PSScriptRoot\src-tauri\bin")
+foreach ($path in $exclusionPaths) {
+    try {
+        $existing = (Get-MpPreference).ExclusionPath
+        if ($existing -and $existing -contains $path) {
+            Write-Host "  [OK] الاستثناء موجود مسبقاً: $path" -ForegroundColor DarkGray
+        } else {
+            Add-MpPreference -ExclusionPath $path -ErrorAction Stop
+            Write-Host "  [+] تم إضافة استثناء Defender: $path" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "  [!] لم يتم إضافة الاستثناء (غير حرج): $path" -ForegroundColor DarkYellow
+        Write-Host "      $($_.Exception.Message)" -ForegroundColor DarkGray
+    }
+}
+
+Write-Host ""
 Write-Host "=================================================" -ForegroundColor Cyan
 Write-Host " NetFlow Studio - تشغيل التطبيق كمسؤول مع درايفر النواة" -ForegroundColor Green
 Write-Host "=================================================" -ForegroundColor Cyan

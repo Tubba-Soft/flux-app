@@ -126,11 +126,22 @@ impl WinDivertLib {
 
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
-                let dll_in_exe = exe_dir.join("WinDivert.dll");
-                if dll_in_exe.exists() {
-                    match unsafe { Library::new(&dll_in_exe) } {
-                        Ok(lib) => loaded_lib = Some(lib),
-                        Err(e) => last_err = format!("Failed to load from exe dir: {}", e),
+                // Search order: next to exe, then bin/, then Tauri resource dirs
+                let candidates = [
+                    exe_dir.join("WinDivert.dll"),
+                    exe_dir.join("bin").join("WinDivert.dll"),
+                    exe_dir.join("_up_").join("resources").join("WinDivert.dll"),
+                    exe_dir.join("resources").join("WinDivert.dll"),
+                ];
+                for candidate in &candidates {
+                    if candidate.exists() {
+                        match unsafe { Library::new(candidate) } {
+                            Ok(lib) => {
+                                loaded_lib = Some(lib);
+                                break;
+                            }
+                            Err(e) => last_err = format!("Failed to load from {:?}: {}", candidate, e),
+                        }
                     }
                 }
             }
