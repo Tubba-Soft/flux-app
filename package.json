@@ -1,13 +1,13 @@
 {
-  "name": "netflow-studio",
+  "name": "flux",
   "private": false,
   "version": "1.0.0",
-  "description": "Granular Windows Network Monitor, Traffic Shaper & Floating Speed Widget",
+  "description": "Flux - Granular Windows Network Monitor, Traffic Shaper & Floating Speed Widget by Tubba-Soft",
   "author": "Tubba-Soft Team - Amjad Alwan",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Tubba-Soft/netflow-studio.git"
+    "url": "https://github.com/Tubba-Soft/flux.git"
   },
   "type": "module",
   "scripts": {

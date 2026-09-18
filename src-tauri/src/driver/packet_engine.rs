@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use dashmap::DashMap;
 use parking_lot::RwLock;
-use log::{info, warn};
+use log::{info, warn, debug};
 
 use crate::driver::windivert_ffi::*;
 use crate::driver::sni::{extract_sni_from_payload, lookup_domain, record_domain_for_ip};
@@ -13,6 +13,20 @@ use crate::process::win32_shell::{get_process_name_from_path, get_process_path};
 use crate::shaper::token_bucket::{ShaperDecision, TokenBucketShaper};
 use crate::storage::db::Database;
 use crate::alerts::app_detector::AppDetector;
+
+#[inline]
+fn current_epoch_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+struct DelayedPacket {
+    send_at: Instant,
+    data: Vec<u8>,
+    addr: WinDivertAddress,
+}
 
 pub struct StreamStats {
     pub stream_id: String,
@@ -30,7 +44,7 @@ pub struct StreamStats {
     pub total_up_bytes: AtomicU64,
     pub down_speed_bps: AtomicU64,
     pub up_speed_bps: AtomicU64,
-    pub last_seen: RwLock<Instant>,
+    pub last_seen_ms: AtomicU64,
 }
 
 pub struct ProcessStats {
@@ -134,6 +148,27 @@ impl PacketEngine {
         let shaper = self.shaper.clone();
         let detector = self.detector.clone();
 
+        let (delay_tx, delay_rx) = std::sync::mpsc::sync_channel::<DelayedPacket>(4096);
+        let delay_lib = lib.clone();
+        let is_running_delay = self.is_running.clone();
+
+        // Dedicated background worker for delayed (throttled) packets so recv loop NEVER blocks!
+        std::thread::spawn(move || {
+            while is_running_delay.load(Ordering::Relaxed) {
+                match delay_rx.recv_timeout(Duration::from_millis(10)) {
+                    Ok(pkt) => {
+                        let now = Instant::now();
+                        if pkt.send_at > now {
+                            std::thread::sleep(pkt.send_at - now);
+                        }
+                        let _ = delay_lib.send(handle, &pkt.data, &pkt.addr);
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                }
+            }
+        });
+
         // Dedicated packet processing loop
         std::thread::spawn(move || {
             info!("WinDivert packet loop started with targeted filter: {}", filter);
@@ -223,9 +258,14 @@ impl PacketEngine {
                                     continue;
                                 }
                                 ShaperDecision::Delay(wait_time) => {
-                                    std::thread::sleep(wait_time);
-                                    if let Err(e) = lib.send(handle, packet_slice, &addr) {
-                                        warn!("WinDivert send (delayed) error: {}", e);
+                                    // Queue packet for asynchronous delayed pacing without blocking the main loop
+                                    let delayed = DelayedPacket {
+                                        send_at: Instant::now() + wait_time,
+                                        data: packet_slice.to_vec(),
+                                        addr,
+                                    };
+                                    if let Err(_) = delay_tx.try_send(delayed) {
+                                        debug!("Delay queue full, dropping excess packet to preserve network stability");
                                     }
                                 }
                                 ShaperDecision::Pass => {
@@ -359,9 +399,9 @@ impl PacketEngine {
             stats.up_speed_bps.store(smoothed_up, Ordering::Relaxed);
         }
 
-        let now = Instant::now();
+        let now_ms = current_epoch_ms();
         self.streams.retain(|_, s| {
-            now.duration_since(*s.last_seen.read()) < Duration::from_secs(30)
+            now_ms.saturating_sub(s.last_seen_ms.load(Ordering::Relaxed)) < 30_000
         });
     }
 
@@ -543,11 +583,11 @@ fn record_packet_metrics(
             total_up_bytes: AtomicU64::new(0),
             down_speed_bps: AtomicU64::new(0),
             up_speed_bps: AtomicU64::new(0),
-            last_seen: RwLock::new(Instant::now()),
+            last_seen_ms: AtomicU64::new(current_epoch_ms()),
         })
     });
 
-    *stream_stats.last_seen.write() = Instant::now();
+    stream_stats.last_seen_ms.store(current_epoch_ms(), Ordering::Relaxed);
     if is_outbound {
         stream_stats.up_bytes_last_window.fetch_add(bytes, Ordering::Relaxed);
         stream_stats.total_up_bytes.fetch_add(bytes, Ordering::Relaxed);

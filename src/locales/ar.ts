@@ -1,6 +1,13 @@
 export const ar = {
-  app_name: "نت فلو ستوديو",
+  app_name: "Flux",
   tagline: "متحكم النطاق الترددي وتشكيل حركة البيانات المتقدم لويندوز",
+  
+  // التحكم عن بعد وحالة الإيقاف
+  remote_locked_title: "تنبيه هام من المطور",
+  remote_locked_default_msg: "تم إيقاف هذا الإصدار مؤقتاً أو تعليقه من قبل المطور. يرجى تنزيل أحدث إصدار للاستمرار.",
+  remote_locked_action: "تحميل التحديث الآن",
+  remote_locked_exit: "خروج من البرنامج",
+  tubba_soft_platform: "منصة تبع سوفت للحلول البرمجية",
   
   // شريط الحالة
   status_kernel_active: "محرك تشكيل النواة نشط (Kernel Shaper)",

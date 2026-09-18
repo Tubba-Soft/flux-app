@@ -35,10 +35,12 @@ extern "system" {
     ) -> usize;
 }
 
-static ICON_CACHE: LazyLock<DashMap<String, String>> = LazyLock::new(|| DashMap::new());
-static PID_PATH_CACHE: LazyLock<DashMap<u32, String>> = LazyLock::new(|| DashMap::new());
+use std::time::{Duration, Instant};
 
-/// Retrieve the full executable image path for a given PID
+static ICON_CACHE: LazyLock<DashMap<String, String>> = LazyLock::new(|| DashMap::new());
+static PID_PATH_CACHE: LazyLock<DashMap<u32, (String, Instant)>> = LazyLock::new(|| DashMap::new());
+
+/// Retrieve the full executable image path for a given PID with TTL-based recycling protection
 pub fn get_process_path(pid: u32) -> Option<String> {
     if pid == 0 {
         return Some("System Idle Process".to_string());
@@ -47,13 +49,18 @@ pub fn get_process_path(pid: u32) -> Option<String> {
         return Some("ntoskrnl.exe".to_string());
     }
 
+    let now = Instant::now();
     if let Some(cached) = PID_PATH_CACHE.get(&pid) {
-        return Some(cached.clone());
+        let (ref path, timestamp) = *cached;
+        if now.duration_since(timestamp) < Duration::from_secs(5) {
+            return Some(path.clone());
+        }
     }
 
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
         if handle.is_null() {
+            PID_PATH_CACHE.remove(&pid);
             return None;
         }
 
@@ -65,9 +72,10 @@ pub fn get_process_path(pid: u32) -> Option<String> {
 
         if success != 0 && size > 0 {
             let path_str = String::from_utf16_lossy(&buffer[..size as usize]);
-            PID_PATH_CACHE.insert(pid, path_str.clone());
+            PID_PATH_CACHE.insert(pid, (path_str.clone(), now));
             Some(path_str)
         } else {
+            PID_PATH_CACHE.remove(&pid);
             None
         }
     }

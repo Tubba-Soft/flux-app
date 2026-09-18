@@ -1,0 +1,12 @@
+{
+  "kill_all": false,
+  "min_required_version": "1.0.0",
+  "disabled_versions": [],
+  "notice_title_ar": "تنبيه هام من المطور",
+  "notice_title_en": "Developer Notice",
+  "notice_msg_ar": "تم إيقاف هذا الإصدار من قبل المطور. يرجى تنزيل أحدث إصدار من موقعنا الرسمي للاستمرار.",
+  "notice_msg_en": "This version has been suspended by the developer. Please download the latest update from our official website to continue.",
+  "action_label_ar": "تحميل التحديث الآن",
+  "action_label_en": "Download Update Now",
+  "action_url": "https://tubbasoft.com"
+}

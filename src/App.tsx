@@ -11,16 +11,26 @@ import { useTelemetry } from './context/TelemetryContext';
 import { TaskbarWidget } from './components/TaskbarWidget';
 import { AboutModal } from './components/AboutModal';
 import { WidgetSettingsModal } from './components/WidgetSettingsModal';
+import { RemoteLockModal } from './components/RemoteLockModal';
 
 export const AppContent: React.FC = () => {
   const { t, isRtl } = useLanguage();
-  const { processes, isBrowserPreview } = useTelemetry();
+  const { processes, isBrowserPreview, remoteLockInfo } = useTelemetry();
 
   const [ruleModalTarget, setRuleModalTarget] = useState<ProcessTraffic | StreamTraffic | null>(null);
   const [inspectProc, setInspectProc] = useState<ProcessTraffic | null>(null);
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
   const [showWidgetSettingsModal, setShowWidgetSettingsModal] = useState<boolean>(false);
   const [searchFilter, setSearchFilter] = useState<string>('');
+
+  const handleExitApp = async () => {
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().close();
+    } catch {
+      window.close();
+    }
+  };
 
   return (
     <div className="flex flex-col h-screen w-screen bg-dark-bg select-none text-slate-100 overflow-hidden font-sans">
@@ -30,8 +40,8 @@ export const AppContent: React.FC = () => {
             <span className="font-bold">⚠️ {isRtl ? 'وضع معاينة المتصفح:' : 'Browser Preview Mode:'}</span>
             <span>
               {isRtl
-                ? 'أنت تتصفح الواجهة عبر متصفح الويب (بيانات توضيحية). لفحص كرت الشبكة الفعلي وتطبيق قواعد تحديد السرعة، شغّل تطبيق NetFlow Studio كمسؤول.'
-                : 'Viewing in web browser (simulated data). To capture real network packets and enforce shaping rules, run the NetFlow Studio desktop app as Administrator.'}
+                ? 'أنت تتصفح الواجهة عبر متصفح الويب (بيانات توضيحية). لفحص كرت الشبكة الفعلي وتطبيق قواعد تحديد السرعة، شغّل تطبيق Flux كمسؤول.'
+                : 'Viewing in web browser (simulated data). To capture real network packets and enforce shaping rules, run the Flux desktop app as Administrator.'}
             </span>
           </div>
         </div>
@@ -56,7 +66,7 @@ export const AppContent: React.FC = () => {
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-brand-emerald animate-pulse" />
-            <span>NetFlow Studio Engine v1.1.0</span>
+            <span>Flux Engine v1.0.0</span>
           </span>
           <span className="text-dark-border">|</span>
           <span>{processes.length} Processes Tracked</span>
@@ -92,6 +102,12 @@ export const AppContent: React.FC = () => {
       <WidgetSettingsModal
         isOpen={showWidgetSettingsModal}
         onClose={() => setShowWidgetSettingsModal(false)}
+      />
+
+      {/* Remote Kill-Switch / Version Deprecation Modal */}
+      <RemoteLockModal
+        lockInfo={remoteLockInfo}
+        onExitApp={handleExitApp}
       />
     </div>
   );

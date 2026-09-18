@@ -1,6 +1,30 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ProcessTraffic, StreamTraffic, DriverStatus, AppRule, StreamRule, NewAppAlert, GlobalTelemetry } from '../types';
 
+export interface RemoteLockInfo {
+  isLocked: boolean;
+  title: string;
+  message: string;
+  actionUrl: string;
+  actionLabel: string;
+}
+
+const APP_VERSION = '1.0.0';
+const REMOTE_CONTROL_URL = 'https://raw.githubusercontent.com/Tubba-Soft/flux/main/app-control.json';
+
+function isVersionOlder(current: string, minRequired: string): boolean {
+  if (!minRequired) return false;
+  const cParts = current.split('.').map((p) => parseInt(p, 10) || 0);
+  const mParts = minRequired.split('.').map((p) => parseInt(p, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    const c = cParts[i] || 0;
+    const m = mParts[i] || 0;
+    if (c < m) return true;
+    if (c > m) return false;
+  }
+  return false;
+}
+
 interface TelemetryContextType {
   processes: ProcessTraffic[];
   driverStatus: DriverStatus;
@@ -14,6 +38,7 @@ interface TelemetryContextType {
   todayTotalBytes: number;
   activeSocketsCount: number;
   newAppAlert: NewAppAlert | null;
+  remoteLockInfo: RemoteLockInfo;
   clearAlert: () => void;
   updateProcessRule: (rule: AppRule) => Promise<void>;
   updateStreamRule: (rule: StreamRule) => Promise<void>;
@@ -47,6 +72,61 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [autostart, setAutostartState] = useState<boolean>(false);
   const [runInBackground, setRunInBackgroundState] = useState<boolean>(true);
   const [taskbarWidget, setTaskbarWidgetState] = useState<boolean>(true);
+  const [remoteLockInfo, setRemoteLockInfo] = useState<RemoteLockInfo>({
+    isLocked: false,
+    title: '',
+    message: '',
+    actionUrl: 'https://tubbasoft.com',
+    actionLabel: '',
+  });
+
+  // Remote Kill-Switch & Version Deprecation Poller
+  useEffect(() => {
+    const verifyRemoteStatus = async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(REMOTE_CONTROL_URL, {
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const shouldLock =
+          data.kill_all === true ||
+          (Array.isArray(data.disabled_versions) && data.disabled_versions.includes(APP_VERSION)) ||
+          isVersionOlder(APP_VERSION, data.min_required_version);
+
+        if (shouldLock) {
+          const lockState: RemoteLockInfo = {
+            isLocked: true,
+            title: data.notice_title_ar || data.notice_title_en || 'تنبيه من المطور',
+            message: data.notice_msg_ar || data.notice_msg_en || 'تم إيقاف هذا الإصدار من قبل المطور.',
+            actionUrl: data.action_url || 'https://tubbasoft.com',
+            actionLabel: data.action_label_ar || data.action_label_en || 'تحميل التحديث الآن',
+          };
+          setRemoteLockInfo(lockState);
+
+          try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('enforce_remote_lockdown', { reason: lockState.message });
+          } catch (e) {
+            console.warn('Failed to call enforce_remote_lockdown:', e);
+          }
+        }
+      } catch (err) {
+        // Offline or unreachable - network monitor continues safely
+        console.log('[Flux] Remote control check skipped (offline or unreachable)');
+      }
+    };
+
+    verifyRemoteStatus();
+    const interval = setInterval(verifyRemoteStatus, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     let unlistenTelemetry: (() => void) | undefined;
@@ -415,8 +495,13 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await invoke('set_autostart', { enabled: enable });
       setAutostartState(enable);
     } catch (e) {
-      console.warn('Failed to set autostart', e);
-      setAutostartState(enable);
+      console.error('Failed to set autostart', e);
+      // Revert/refresh state from backend to reflect true status
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const trueStatus = await invoke<boolean>('get_autostart');
+        setAutostartState(trueStatus);
+      } catch (_) {}
     }
   };
 
@@ -426,8 +511,7 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await invoke('set_run_in_background', { enabled: enable });
       setRunInBackgroundState(enable);
     } catch (e) {
-      console.warn('Failed to set run_in_background', e);
-      setRunInBackgroundState(enable);
+      console.error('Failed to set run_in_background', e);
     }
   };
 
@@ -472,6 +556,7 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         todayTotalBytes,
         activeSocketsCount,
         newAppAlert,
+        remoteLockInfo,
         clearAlert,
         updateProcessRule,
         updateStreamRule,

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTelemetry } from '../context/TelemetryContext';
 import { formatSpeed, formatBytes } from '../utils/formatters';
+import { openExternalLink } from '../utils/navigation';
 import { BandwidthSparkline } from './BandwidthSparkline';
 import {
   Activity,
@@ -57,9 +58,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAbout, onOpenWidgetSetting
       <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-dark-border/40">
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-emerald via-brand-cyan to-brand-purple p-[1.5px] shadow-lg shadow-brand-cyan/20">
-            <div className="w-full h-full bg-dark-bg rounded-[10px] flex items-center justify-center">
-              <Activity className="w-5 h-5 text-brand-cyan animate-pulse" />
+          <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-emerald via-brand-cyan to-brand-purple p-[1.5px] shadow-lg shadow-brand-cyan/20 shrink-0">
+            <div className="w-full h-full bg-dark-bg rounded-[10px] flex items-center justify-center overflow-hidden p-1">
+              <img src="/logo.png" alt="Flux" className="w-full h-full object-contain" />
             </div>
           </div>
           <div>
@@ -164,6 +165,22 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAbout, onOpenWidgetSetting
             title={t.av_notice_title}
           >
             <Info className="w-4 h-4" />
+          </button>
+
+          {/* Tubba Soft Official Logo Badge with direct website link */}
+          <button
+            onClick={() => openExternalLink('https://tubbasoft.com')}
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-800/70 hover:bg-slate-700/80 border border-purple-500/30 hover:border-purple-400/60 transition group cursor-pointer shadow-sm"
+            title={isRtl ? 'زيارة منصة شركة تبع سوفت الرسمية (tubbasoft.com)' : 'Visit official Tubba Soft platform (tubbasoft.com)'}
+          >
+            <img
+              src="/tubba-soft-logo.png"
+              alt="Tubba Soft"
+              className="w-4 h-4 object-contain group-hover:scale-110 transition-transform"
+            />
+            <span className="text-xs font-semibold bg-gradient-to-r from-purple-300 via-pink-200 to-indigo-300 bg-clip-text text-transparent hidden sm:inline">
+              Tubba Soft
+            </span>
           </button>
 
           {/* Language Switcher */}

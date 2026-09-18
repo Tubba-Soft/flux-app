@@ -1,6 +1,13 @@
 export const en = {
-  app_name: "NetFlow Studio",
+  app_name: "Flux",
   tagline: "Granular Bandwidth Controller & Traffic Shaper",
+  
+  // Remote Control & Kill Switch
+  remote_locked_title: "Important Developer Notice",
+  remote_locked_default_msg: "This version has been suspended or deprecated by the developer. Please download the latest version to continue.",
+  remote_locked_action: "Download Update Now",
+  remote_locked_exit: "Exit Application",
+  tubba_soft_platform: "Tubba Soft Engineering Platform",
   
   // Status Bar
   status_kernel_active: "Kernel Shaper Active",

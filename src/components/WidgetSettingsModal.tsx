@@ -343,22 +343,41 @@ export const WidgetSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Action Buttons (Fixed Footer Bar) */}
-        <div className="flex items-center justify-end gap-2.5 p-4 border-t border-slate-800 bg-slate-950/80 shrink-0 backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-2.5 p-4 border-t border-slate-800 bg-slate-950/80 shrink-0 backdrop-blur-sm">
           <button
             type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition text-xs"
+            onClick={async () => {
+              try {
+                const { invoke } = await import('@tauri-apps/api/core');
+                await invoke('reset_widget_position');
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+            className="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-cyan-400 hover:text-cyan-300 transition text-xs font-semibold flex items-center gap-1.5"
+            title={isRtl ? 'إعادة الودجت لموضعه الافتراضي فوق شريط المهام' : 'Reset widget to default position above taskbar'}
           >
-            {isRtl ? 'إلغاء' : 'Cancel'}
+            <span>📍</span>
+            <span>{isRtl ? 'إعادة ضبط الموضع' : 'Reset Position'}</span>
           </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="px-5 py-2 rounded-xl bg-brand-cyan hover:bg-cyan-400 text-slate-950 font-bold transition text-xs shadow-lg shadow-brand-cyan/20"
-          >
-            {saving ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : isRtl ? 'تطبيق وحفظ' : 'Apply & Save'}
-          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition text-xs"
+            >
+              {isRtl ? 'إلغاء' : 'Cancel'}
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="px-5 py-2 rounded-xl bg-brand-cyan hover:bg-cyan-400 text-slate-950 font-bold transition text-xs shadow-lg shadow-brand-cyan/20"
+            >
+              {saving ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : isRtl ? 'تطبيق وحفظ' : 'Apply & Save'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

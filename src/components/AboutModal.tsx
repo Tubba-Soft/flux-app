@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { ShieldCheck, X, Globe, ExternalLink, Cpu, Code2, Users, Layers, Award } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { openExternalLink } from '../utils/navigation';
 
 interface Props {
   isOpen: boolean;
@@ -48,15 +49,15 @@ export const AboutModal: React.FC<Props> = ({ isOpen, onClose }) => {
         {/* Header */}
         <div className="flex items-center gap-3.5 mb-5">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-brand-emerald via-brand-cyan to-brand-purple p-[2px] shadow-lg shadow-brand-cyan/20 shrink-0">
-            <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-              <ShieldCheck className="w-6 h-6 text-brand-cyan" />
+            <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center overflow-hidden p-1">
+              <img src="/logo.png" alt="Flux" className="w-full h-full object-contain" />
             </div>
           </div>
           <div>
             <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-              <span>NetFlow Studio</span>
+              <span>Flux</span>
               <span className="text-xs font-mono font-normal px-2 py-0.5 rounded-full bg-brand-cyan/15 text-brand-cyan border border-brand-cyan/30">
-                v1.1.0
+                v1.0.0
               </span>
             </h2>
             <p className="text-xs text-slate-400">
@@ -85,8 +86,8 @@ export const AboutModal: React.FC<Props> = ({ isOpen, onClose }) => {
             </div>
 
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-brand-purple/10 text-brand-purple">
-                <Users className="w-5 h-5" />
+              <div className="p-1 rounded-lg bg-brand-purple/10 border border-brand-purple/20 flex items-center justify-center">
+                <img src="/tubba-soft-logo.png" alt="Tubba Soft" className="w-7 h-7 object-contain" />
               </div>
               <div>
                 <span className="text-[11px] font-medium text-slate-400 block">
@@ -104,15 +105,13 @@ export const AboutModal: React.FC<Props> = ({ isOpen, onClose }) => {
               <Globe className="w-3.5 h-3.5 text-brand-cyan" />
               <span>{isRtl ? 'الموقع الرسمي المعتمد:' : 'Official Platform:'}</span>
             </div>
-            <a
-              href="https://tubbasoft.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-brand-cyan font-mono hover:underline font-semibold"
+            <button
+              onClick={() => openExternalLink('https://tubbasoft.com')}
+              className="flex items-center gap-1.5 text-brand-cyan font-mono hover:underline font-semibold cursor-pointer group"
             >
               <span>tubbasoft.com</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
+              <ExternalLink className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+            </button>
           </div>
         </div>
 

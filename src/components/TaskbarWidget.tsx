@@ -143,14 +143,19 @@ export const TaskbarWidget: React.FC = () => {
 
         const currentWin = getCurrentWebviewWindow();
 
-        // استخدام الإحداثيات المباشرة من Payload دون استدعاء IPC زائد
+        // استخدام الإحداثيات المباشرة من Payload دون استدعاء IPC زائد مع فلترة وحماية صارمة
         unlistenMove = await currentWin.listen<PhysicalPosition>('tauri://move', (event) => {
+          const pos = event.payload;
+          // حماية صارمة: رفض أي إحداثيات سالبة أو غير منطقية (مثل -32000 عند قفل الشاشة أو وضع السكون أو Win+D)
+          if (!pos || pos.x < 0 || pos.y < 0 || pos.x > 15000 || pos.y > 15000) {
+            return;
+          }
+
           if (savePosDebounceRef.current) clearTimeout(savePosDebounceRef.current);
 
           savePosDebounceRef.current = setTimeout(async () => {
-            const pos = event.payload;
-            if (pos) {
-              await invoke('save_widget_position', { x: pos.x, y: pos.y }).catch(() => {});
+            if (pos.x >= 0 && pos.y >= 0) {
+              await invoke('save_widget_position', { x: Math.round(pos.x), y: Math.round(pos.y) }).catch(() => {});
             }
             isDraggingRef.current = false;
             // فحص الهوفر قبل بدء المؤقت لمنع التلاشي والماوس فوق النافذة
@@ -159,6 +164,10 @@ export const TaskbarWidget: React.FC = () => {
             }
           }, 400);
         });
+
+        // تأكيد إظهار النافذة وتثبيتها كـ Topmost فور اكتمال الجاهزية
+        await currentWin.show().catch(() => {});
+        await currentWin.setAlwaysOnTop(true).catch(() => {});
 
         if (!isMounted && unlistenMove) unlistenMove();
       } catch (e) {

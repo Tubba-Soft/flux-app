@@ -1,12 +1,12 @@
 [package]
-name = "netflow-studio"
+name = "flux"
 version = "1.0.0"
-description = "NetFlow Studio - Granular Windows Network Monitor & Traffic Shaper by Tubba-Soft"
+description = "Flux - Granular Windows Network Monitor & Traffic Shaper by Tubba-Soft"
 authors = ["Tubba-Soft Team - Amjad Alwan <https://github.com/Tubba-Soft>"]
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/Tubba-Soft/netflow-studio"
-homepage = "https://github.com/Tubba-Soft/netflow-studio"
+repository = "https://github.com/Tubba-Soft/flux"
+homepage = "https://tubbasoft.com"
 
 
 [build-dependencies]

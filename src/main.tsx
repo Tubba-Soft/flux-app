@@ -5,12 +5,27 @@ import { LanguageProvider } from './context/LanguageContext';
 import { TelemetryProvider } from './context/TelemetryContext';
 import './index.css';
 
+import { TaskbarWidget } from './components/TaskbarWidget';
+
+const isWidget = window.location.hash === '#widget';
+
+if (isWidget) {
+  document.documentElement.classList.add('widget-mode');
+  document.body.classList.add('widget-mode');
+  const root = document.getElementById('root');
+  if (root) root.classList.add('widget-mode');
+}
+
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <LanguageProvider>
-      <TelemetryProvider>
-        <App />
-      </TelemetryProvider>
-    </LanguageProvider>
+    {isWidget ? (
+      <TaskbarWidget />
+    ) : (
+      <LanguageProvider>
+        <TelemetryProvider>
+          <App />
+        </TelemetryProvider>
+      </LanguageProvider>
+    )}
   </React.StrictMode>
 );
