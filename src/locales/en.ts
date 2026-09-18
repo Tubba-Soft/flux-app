@@ -9,6 +9,11 @@ export const en = {
   remote_locked_exit: "Exit Application",
   tubba_soft_platform: "Tubba Soft Engineering Platform",
   
+  // Theme Modes
+  theme_light: "Light Mode",
+  theme_dark: "Dark Mode",
+  theme_system: "System Default",
+  
   // Status Bar
   status_kernel_active: "Kernel Shaper Active",
   status_passive_monitor: "Passive Socket Monitor",

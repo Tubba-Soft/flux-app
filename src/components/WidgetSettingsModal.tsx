@@ -128,32 +128,32 @@ export const WidgetSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 dark:bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="bg-slate-900/95 border border-slate-700/80 rounded-2xl max-w-lg w-full shadow-2xl relative text-slate-100 flex flex-col max-h-[85vh] ring-1 ring-white/10 overflow-hidden"
+        className="bg-white dark:bg-slate-900/95 border border-transparent dark:border-slate-700/80 rounded-2xl max-w-lg w-full shadow-2xl relative text-slate-900 dark:text-slate-100 flex flex-col max-h-[85vh] dark:ring-1 dark:ring-white/10 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         dir={isRtl ? 'rtl' : 'ltr'}
       >
         {/* Header (Fixed) */}
-        <div className="flex items-center justify-between p-5 pb-4 border-b border-slate-800 shrink-0 bg-slate-900/95">
+        <div className="flex items-center justify-between p-5 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0 bg-white/95 dark:bg-slate-900/95">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-brand-cyan/15 text-brand-cyan border border-brand-cyan/30">
+            <div className="p-2 rounded-xl bg-cyan-500/10 dark:bg-brand-cyan/15 text-cyan-600 dark:text-brand-cyan border border-transparent dark:border-brand-cyan/30">
               <Sliders className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
                 {isRtl ? 'تخصيص وإدارة ودجت شريط المهام' : 'Taskbar Widget Settings'}
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 {isRtl ? 'التحكم في التثبيت، الشفافية الذكية، ونظام الألوان' : 'Manage docking presets, smart transparency, and theme colors'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+            className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -163,187 +163,187 @@ export const WidgetSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
         <div className="p-5 overflow-y-auto flex-1 min-h-0 space-y-5">
           {/* Section 1: Movement & Pinning */}
           <div className="space-y-3">
-          <label className="text-xs font-bold text-slate-300 flex items-center gap-2">
-            <Compass className="w-4 h-4 text-brand-cyan" />
-            <span>{isRtl ? 'حالة التموضع والتحريك:' : 'Positioning Mode:'}</span>
-          </label>
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <Compass className="w-4 h-4 text-cyan-600 dark:text-brand-cyan" />
+              <span>{isRtl ? 'حالة التموضع والتحريك:' : 'Positioning Mode:'}</span>
+            </label>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={() => setConfig((prev) => ({ ...prev, locked: false }))}
-              className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-semibold transition ${
-                !config.locked
-                  ? 'bg-brand-cyan/15 border-brand-cyan text-white shadow-sm'
-                  : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-800/40'
-              }`}
-            >
-              <Move className="w-4 h-4 text-cyan-400" />
-              <div className="text-start">
-                <span className="block">{isRtl ? 'سحب وتحريك حر' : 'Free Dragging'}</span>
-                <span className="text-[10px] font-normal text-slate-400 block">
-                  {isRtl ? 'اسحب الودجت بسهولة لأي مكان' : 'Drag easily to any screen spot'}
-                </span>
-              </div>
-            </button>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setConfig((prev) => ({ ...prev, locked: false }))}
+                className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-semibold transition ${
+                  !config.locked
+                    ? 'bg-cyan-500/15 border-transparent dark:border-brand-cyan text-cyan-800 dark:text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-950/60 border-transparent dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200/80 dark:hover:bg-slate-800/40'
+                }`}
+              >
+                <Move className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                <div className="text-start">
+                  <span className="block">{isRtl ? 'سحب وتحريك حر' : 'Free Dragging'}</span>
+                  <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400 block">
+                    {isRtl ? 'اسحب الودجت بسهولة لأي مكان' : 'Drag easily to any screen spot'}
+                  </span>
+                </div>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setConfig((prev) => ({ ...prev, locked: true }))}
-              className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-semibold transition ${
-                config.locked
-                  ? 'bg-brand-cyan/15 border-brand-cyan text-white shadow-sm'
-                  : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-800/40'
-              }`}
-            >
-              <Lock className="w-4 h-4 text-amber-400" />
-              <div className="text-start">
-                <span className="block">{isRtl ? 'تثبيت في موقع محدد' : 'Locked / Pinned'}</span>
-                <span className="text-[10px] font-normal text-slate-400 block">
-                  {isRtl ? 'تثبيت دقيق بدون تحريك بالخطأ' : 'Snap to screen positions'}
-                </span>
-              </div>
-            </button>
-          </div>
-
-          {/* Preset Positions (Shown when locked) */}
-          {config.locked && (
-            <div className="mt-2.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2 animate-fade-in">
-              <span className="text-[11px] font-semibold text-slate-300 block">
-                {isRtl ? 'اختر موضع التثبيت للشاشة:' : 'Select Screen Docking Preset:'}
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                {PRESET_POSITIONS.map((pos) => (
-                  <button
-                    key={pos.id}
-                    type="button"
-                    onClick={() => handlePresetChange(pos.id)}
-                    className={`px-3 py-2 rounded-lg text-start text-[11px] font-medium border transition ${
-                      config.preset === pos.id
-                        ? 'bg-brand-cyan/20 border-brand-cyan text-cyan-300'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                    }`}
-                  >
-                    {isRtl ? pos.labelAr : pos.labelEn}
-                  </button>
-                ))}
-              </div>
+              <button
+                type="button"
+                onClick={() => setConfig((prev) => ({ ...prev, locked: true }))}
+                className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-semibold transition ${
+                  config.locked
+                    ? 'bg-cyan-500/15 border-transparent dark:border-brand-cyan text-cyan-800 dark:text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-950/60 border-transparent dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200/80 dark:hover:bg-slate-800/40'
+                }`}
+              >
+                <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <div className="text-start">
+                  <span className="block">{isRtl ? 'تثبيت في موقع محدد' : 'Locked / Pinned'}</span>
+                  <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400 block">
+                    {isRtl ? 'تثبيت دقيق بدون تحريك بالخطأ' : 'Snap to screen positions'}
+                  </span>
+                </div>
+              </button>
             </div>
-          )}
-        </div>
 
-        {/* Section 2: Smart Transparency on Hover */}
-        <div className="mb-5 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-purple-400" />
-              <div>
-                <span className="text-xs font-bold text-slate-200 block">
-                  {isRtl ? 'الشفافية بعد فترة التأشير / التوقف' : 'Auto-Transparency on Idle/Hover'}
+            {/* Preset Positions (Shown when locked) */}
+            {config.locked && (
+              <div className="mt-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-transparent dark:border-slate-800 space-y-2 animate-fade-in">
+                <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block">
+                  {isRtl ? 'اختر موضع التثبيت للشاشة:' : 'Select Screen Docking Preset:'}
                 </span>
-                <span className="text-[10px] text-slate-400 block">
-                  {isRtl ? 'يتحول الودجت لشفاف ناعم بعد مدة ثوانٍ محددة' : 'Becomes translucent after configured idle delay'}
-                </span>
-              </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={config.auto_transparency}
-              onChange={(e) => setConfig((prev) => ({ ...prev, auto_transparency: e.target.checked }))}
-              className="w-4 h-4 accent-brand-cyan cursor-pointer"
-            />
-          </div>
-
-          {config.auto_transparency && (
-            <div className="space-y-3 pt-2.5 border-t border-slate-800/80 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 font-medium">
-                  {isRtl ? 'مهلة الانتظار قبل التلاشي:' : 'Delay before fade:'}
-                </span>
-                <div className="flex items-center gap-1.5">
-                  {[1, 2, 3, 5].map((sec) => (
+                <div className="grid grid-cols-2 gap-2">
+                  {PRESET_POSITIONS.map((pos) => (
                     <button
-                      key={sec}
+                      key={pos.id}
                       type="button"
-                      onClick={() => setConfig((prev) => ({ ...prev, transparency_delay_secs: sec }))}
-                      className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold border transition ${
-                        config.transparency_delay_secs === sec
-                          ? 'bg-purple-600/30 border-purple-500 text-purple-200'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800'
+                      onClick={() => handlePresetChange(pos.id)}
+                      className={`px-3 py-2 rounded-lg text-start text-[11px] font-medium border transition ${
+                        config.preset === pos.id
+                          ? 'bg-cyan-500/20 border-transparent dark:border-brand-cyan text-cyan-800 dark:text-cyan-300 font-semibold'
+                          : 'bg-slate-100 dark:bg-slate-900 border-transparent dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
-                      {sec} {isRtl ? 'ث' : 's'}
+                      {isRtl ? pos.labelAr : pos.labelEn}
                     </button>
                   ))}
                 </div>
               </div>
+            )}
+          </div>
 
-              {/* Opacity Range Slider */}
-              <div className="pt-2 border-t border-slate-800/50 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400 font-medium">
-                    {isRtl ? 'مستوى الشفافية عند التلاشي:' : 'Transparency Opacity Level:'}
+          {/* Section 2: Smart Transparency on Hover */}
+          <div className="mb-5 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-transparent dark:border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                    {isRtl ? 'الشفافية بعد فترة التأشير / التوقف' : 'Auto-Transparency on Idle/Hover'}
                   </span>
-                  <span className="font-mono font-bold text-brand-cyan">
-                    {config.transparency_opacity ?? 30}%
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
+                    {isRtl ? 'يتحول الودجت لشفاف ناعم بعد مدة ثوانٍ محددة' : 'Becomes translucent after configured idle delay'}
                   </span>
-                </div>
-                <input
-                  type="range"
-                  min="10"
-                  max="90"
-                  step="5"
-                  value={config.transparency_opacity ?? 30}
-                  onChange={(e) => setConfig((prev) => ({ ...prev, transparency_opacity: Number(e.target.value) }))}
-                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-brand-cyan"
-                />
-                <div className="flex justify-between text-[10px] text-slate-500 font-sans">
-                  <span>{isRtl ? 'شفاف جداً (10%)' : 'Very Translucent (10%)'}</span>
-                  <span>{isRtl ? 'شبه معتم (90%)' : 'Semi-Opaque (90%)'}</span>
                 </div>
               </div>
+              <input
+                type="checkbox"
+                checked={config.auto_transparency}
+                onChange={(e) => setConfig((prev) => ({ ...prev, auto_transparency: e.target.checked }))}
+                className="w-4 h-4 accent-cyan-600 dark:accent-brand-cyan cursor-pointer"
+              />
             </div>
-          )}
-        </div>
 
-        {/* Section 3: Color Themes */}
-        <div className="mb-6 space-y-2.5">
-          <label className="text-xs font-bold text-slate-300 flex items-center gap-2">
-            <Palette className="w-4 h-4 text-emerald-400" />
-            <span>{isRtl ? 'نظام ألوان النصوص والأسهم:' : 'Text & Icon Color Theme:'}</span>
-          </label>
-
-          <div className="space-y-1.5">
-            {COLOR_THEMES.map((theme) => {
-              const isSelected = config.color_theme === theme.id;
-              return (
-                <button
-                  key={theme.id}
-                  type="button"
-                  onClick={() => setConfig((prev) => ({ ...prev, color_theme: theme.id }))}
-                  className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs font-medium transition ${
-                    isSelected
-                      ? 'bg-slate-800/90 border-brand-cyan/60 text-white ring-1 ring-brand-cyan/20'
-                      : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex items-center gap-1 p-1 rounded bg-slate-950 border border-slate-800">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.previewDown }} />
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.previewUp }} />
-                    </div>
-                    <span>{isRtl ? theme.nameAr : theme.nameEn}</span>
+            {config.auto_transparency && (
+              <div className="space-y-3 pt-2.5 border-t border-slate-200 dark:border-slate-800/80 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600 dark:text-slate-400 font-medium">
+                    {isRtl ? 'مهلة الانتظار قبل التلاشي:' : 'Delay before fade:'}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {[1, 2, 3, 5].map((sec) => (
+                      <button
+                        key={sec}
+                        type="button"
+                        onClick={() => setConfig((prev) => ({ ...prev, transparency_delay_secs: sec }))}
+                        className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold border transition ${
+                          config.transparency_delay_secs === sec
+                            ? 'bg-purple-100 dark:bg-purple-600/30 border-transparent dark:border-purple-500 text-purple-800 dark:text-purple-200'
+                            : 'bg-slate-100 dark:bg-slate-900 border-transparent dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {sec} {isRtl ? 'ث' : 's'}
+                      </button>
+                    ))}
                   </div>
-                  {isSelected && <Check className="w-4 h-4 text-brand-cyan" />}
-                </button>
-              );
-            })}
+                </div>
+
+                {/* Opacity Range Slider */}
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800/50 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-400 font-medium">
+                      {isRtl ? 'مستوى الشفافية عند التلاشي:' : 'Transparency Opacity Level:'}
+                    </span>
+                    <span className="font-mono font-bold text-cyan-600 dark:text-brand-cyan">
+                      {config.transparency_opacity ?? 30}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="90"
+                    step="5"
+                    value={config.transparency_opacity ?? 30}
+                    onChange={(e) => setConfig((prev) => ({ ...prev, transparency_opacity: Number(e.target.value) }))}
+                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-600 dark:accent-brand-cyan"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-500 font-sans">
+                    <span>{isRtl ? 'شفاف جداً (10%)' : 'Very Translucent (10%)'}</span>
+                    <span>{isRtl ? 'شبه معتم (90%)' : 'Semi-Opaque (90%)'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+
+          {/* Section 3: Color Themes */}
+          <div className="mb-6 space-y-2.5">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <Palette className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>{isRtl ? 'نظام ألوان النصوص والأسهم:' : 'Text & Icon Color Theme:'}</span>
+            </label>
+
+            <div className="space-y-1.5">
+              {COLOR_THEMES.map((theme) => {
+                const isSelected = config.color_theme === theme.id;
+                return (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    onClick={() => setConfig((prev) => ({ ...prev, color_theme: theme.id }))}
+                    className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs font-medium transition ${
+                      isSelected
+                        ? 'bg-cyan-50 dark:bg-slate-800/90 border-transparent dark:border-brand-cyan/60 text-cyan-900 dark:text-white shadow-sm'
+                        : 'bg-slate-50 dark:bg-slate-950/50 border-transparent dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-1 p-1 rounded bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xs">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.previewDown }} />
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.previewUp }} />
+                      </div>
+                      <span>{isRtl ? theme.nameAr : theme.nameEn}</span>
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-cyan-600 dark:text-brand-cyan" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Action Buttons (Fixed Footer Bar) */}
-        <div className="flex items-center justify-between gap-2.5 p-4 border-t border-slate-800 bg-slate-950/80 shrink-0 backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-2.5 p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-950/80 shrink-0 backdrop-blur-sm">
           <button
             type="button"
             onClick={async () => {
@@ -354,7 +354,7 @@ export const WidgetSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 console.error(e);
               }
             }}
-            className="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-cyan-400 hover:text-cyan-300 transition text-xs font-semibold flex items-center gap-1.5"
+            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 border border-transparent dark:border-slate-700/80 text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300 transition text-xs font-semibold flex items-center gap-1.5 shadow-sm dark:shadow-none"
             title={isRtl ? 'إعادة الودجت لموضعه الافتراضي فوق شريط المهام' : 'Reset widget to default position above taskbar'}
           >
             <span>📍</span>
@@ -365,7 +365,7 @@ export const WidgetSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition text-xs"
+              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold transition text-xs"
             >
               {isRtl ? 'إلغاء' : 'Cancel'}
             </button>
@@ -373,7 +373,7 @@ export const WidgetSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="px-5 py-2 rounded-xl bg-brand-cyan hover:bg-cyan-400 text-slate-950 font-bold transition text-xs shadow-lg shadow-brand-cyan/20"
+              className="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 dark:bg-brand-cyan dark:hover:bg-cyan-400 text-white dark:text-slate-950 font-bold transition text-xs shadow-md shadow-brand-cyan/20"
             >
               {saving ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : isRtl ? 'تطبيق وحفظ' : 'Apply & Save'}
             </button>

@@ -2,31 +2,86 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Light Mode (Zero Borders, Clean Minimalist Elevation) */
+  --bg-app: #F4F6F9;
+  --bg-surface: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #EDF2F7;
+  --bg-row-alt: #F8FAFC;
+  --text-main: #0F172A;
+  --text-muted: #475569;
+  --border-app: transparent;
+  --scrollbar-track: #E2E8F0;
+  --scrollbar-thumb: #CBD5E1;
+  --scrollbar-thumb-hover: #94A3B8;
+}
+
+html.dark {
+  /* Dark Mode (Cyber Glassmorphic Navy) */
+  --bg-app: #0B0F17;
+  --bg-surface: #121824;
+  --bg-card: #182234;
+  --bg-card-hover: #1F2C42;
+  --bg-row-alt: #141C2B;
+  --text-main: #F8FAFC;
+  --text-muted: #94A3B8;
+  --border-app: #223048;
+  --scrollbar-track: #0E1420;
+  --scrollbar-thumb: #1E293B;
+  --scrollbar-thumb-hover: #334155;
+}
+
 @layer base {
   body {
     user-select: none;
-    background-color: #0B0F17;
-    color: #F1F5F9;
+    background-color: var(--bg-app);
+    color: var(--text-main);
+    transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
-/* Custom Sleek Scrollbar for High-Density Data Tables */
+/* Enforce ZERO BORDERS on all shapes, cards, tables, panels, and buttons in Light Mode */
+html:not(.dark) [class*="border"],
+html:not(.dark) .border,
+html:not(.dark) .border-b,
+html:not(.dark) .border-t,
+html:not(.dark) .border-l,
+html:not(.dark) .border-r {
+  border-color: transparent !important;
+}
+
+html:not(.dark) [class*="ring-"] {
+  --tw-ring-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Elegant shadow elevation in Light Mode without any outlines or borders */
+html:not(.dark) .bg-dark-card {
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+}
+
+html:not(.dark) .bg-dark-surface {
+  box-shadow: 0 2px 6px -1px rgba(15, 23, 42, 0.06), 0 1px 3px -1px rgba(15, 23, 42, 0.03);
+}
+
+/* Custom Sleek Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0E1420;
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1E293B;
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Smooth RTL/LTR support */
@@ -40,9 +95,13 @@
 
 /* Glassmorphism utility */
 .glass-panel {
-  background: rgba(18, 24, 36, 0.75);
+  background: var(--bg-surface);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+html.dark .glass-panel {
+  background: rgba(18, 24, 36, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 

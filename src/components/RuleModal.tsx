@@ -55,26 +55,26 @@ export const RuleModal: React.FC<Props> = ({ target, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-dark-surface border border-dark-border rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-dark-surface border border-transparent dark:border-dark-border rounded-2xl max-w-md w-full p-6 shadow-2xl relative text-slate-900 dark:text-slate-100">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 rtl:right-auto rtl:left-4 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-dark-hover transition"
+          className="absolute top-4 right-4 rtl:right-auto rtl:left-4 p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-dark-hover transition"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Title */}
         <div className="flex items-center gap-3 mb-5">
-          <div className="p-2.5 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 text-brand-cyan">
+          <div className="p-2.5 rounded-xl bg-cyan-500/10 dark:bg-brand-cyan/10 border border-transparent dark:border-brand-cyan/20 text-cyan-600 dark:text-brand-cyan">
             <Sliders className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-white">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
               {isProcess ? t.rule_title_proc : t.rule_title_stream}
             </h3>
-            <p className="text-xs text-slate-400 truncate max-w-[280px]">
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[280px]">
               {isProcess ? (target as ProcessTraffic).name : (target as StreamTraffic).id}
             </p>
           </div>
@@ -84,7 +84,7 @@ export const RuleModal: React.FC<Props> = ({ target, onClose }) => {
         <div className="space-y-4">
           {/* Download Cap */}
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
               {t.rule_down_limit} (KB/s)
             </label>
             <div className="flex items-center gap-2">
@@ -93,12 +93,12 @@ export const RuleModal: React.FC<Props> = ({ target, onClose }) => {
                 value={downLimit}
                 onChange={(e) => setDownLimit(e.target.value)}
                 placeholder={t.rule_no_limit}
-                className="flex-1 bg-dark-bg border border-dark-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-emerald"
+                className="flex-1 bg-slate-100 dark:bg-dark-bg border border-transparent dark:border-dark-border rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
               />
               <button
                 type="button"
                 onClick={() => setDownLimit('')}
-                className="px-2.5 py-2 rounded-lg bg-dark-card border border-dark-border text-xs text-slate-400 hover:text-slate-200"
+                className="px-2.5 py-2 rounded-lg bg-slate-200/80 dark:bg-dark-card border border-transparent dark:border-dark-border text-xs text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-300/80 dark:hover:bg-dark-hover"
               >
                 {t.clear_filter}
               </button>
@@ -109,7 +109,7 @@ export const RuleModal: React.FC<Props> = ({ target, onClose }) => {
                   key={preset}
                   type="button"
                   onClick={() => setDownLimit(preset.toString())}
-                  className="px-2 py-0.5 rounded bg-dark-card border border-dark-border text-[10px] text-slate-400 hover:text-brand-emerald hover:border-brand-emerald/40"
+                  className="px-2 py-0.5 rounded bg-slate-100 dark:bg-dark-card border border-transparent dark:border-dark-border text-[10px] text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-brand-emerald hover:bg-slate-200 dark:hover:bg-dark-hover"
                 >
                   {preset >= 1024 ? `${preset / 1024} MB/s` : `${preset} KB/s`}
                 </button>
@@ -119,7 +119,7 @@ export const RuleModal: React.FC<Props> = ({ target, onClose }) => {
 
           {/* Upload Cap */}
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
               {t.rule_up_limit} (KB/s)
             </label>
             <div className="flex items-center gap-2">
@@ -128,12 +128,12 @@ export const RuleModal: React.FC<Props> = ({ target, onClose }) => {
                 value={upLimit}
                 onChange={(e) => setUpLimit(e.target.value)}
                 placeholder={t.rule_no_limit}
-                className="flex-1 bg-dark-bg border border-dark-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-cyan"
+                className="flex-1 bg-slate-100 dark:bg-dark-bg border border-transparent dark:border-dark-border rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
               <button
                 type="button"
                 onClick={() => setUpLimit('')}
-                className="px-2.5 py-2 rounded-lg bg-dark-card border border-dark-border text-xs text-slate-400 hover:text-slate-200"
+                className="px-2.5 py-2 rounded-lg bg-slate-200/80 dark:bg-dark-card border border-transparent dark:border-dark-border text-xs text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-300/80 dark:hover:bg-dark-hover"
               >
                 {t.clear_filter}
               </button>
@@ -144,7 +144,7 @@ export const RuleModal: React.FC<Props> = ({ target, onClose }) => {
                   key={preset}
                   type="button"
                   onClick={() => setUpLimit(preset.toString())}
-                  className="px-2 py-0.5 rounded bg-dark-card border border-dark-border text-[10px] text-slate-400 hover:text-brand-cyan hover:border-brand-cyan/40"
+                  className="px-2 py-0.5 rounded bg-slate-100 dark:bg-dark-card border border-transparent dark:border-dark-border text-[10px] text-slate-600 dark:text-slate-400 hover:text-cyan-600 dark:hover:text-brand-cyan hover:bg-slate-200 dark:hover:bg-dark-hover"
                 >
                   {preset >= 1024 ? `${preset / 1024} MB/s` : `${preset} KB/s`}
                 </button>
@@ -155,7 +155,7 @@ export const RuleModal: React.FC<Props> = ({ target, onClose }) => {
           {/* Priority (Process only) */}
           {isProcess && (
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 {t.rule_priority}
               </label>
               <div className="grid grid-cols-3 gap-2">
@@ -170,8 +170,8 @@ export const RuleModal: React.FC<Props> = ({ target, onClose }) => {
                     onClick={() => setPriority(p.id)}
                     className={`py-2 px-2 text-xs font-medium rounded-lg border text-center transition ${
                       priority === p.id
-                        ? 'bg-brand-cyan/20 border-brand-cyan text-brand-cyan font-bold'
-                        : `bg-dark-bg border-dark-border text-slate-400 ${p.color}`
+                        ? 'bg-cyan-500/15 border-transparent dark:border-brand-cyan text-cyan-800 dark:text-brand-cyan font-bold shadow-sm'
+                        : `bg-slate-100 dark:bg-dark-bg border-transparent dark:border-dark-border text-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-dark-hover ${p.color}`
                     }`}
                   >
                     {p.id}
@@ -182,11 +182,11 @@ export const RuleModal: React.FC<Props> = ({ target, onClose }) => {
           )}
 
           {/* Block Toggle */}
-          <div className="pt-2 border-t border-dark-border/40">
-            <label className="flex items-center justify-between p-3 rounded-xl bg-dark-bg border border-dark-border cursor-pointer hover:bg-dark-hover transition">
+          <div className="pt-2 border-t border-slate-200 dark:border-dark-border/40">
+            <label className="flex items-center justify-between p-3 rounded-xl bg-slate-100 dark:bg-dark-bg border border-transparent dark:border-dark-border cursor-pointer hover:bg-slate-200/70 dark:hover:bg-dark-hover transition">
               <div className="flex items-center gap-2">
-                <ShieldOff className={`w-4 h-4 ${isBlocked ? 'text-rose-400' : 'text-slate-400'}`} />
-                <span className={`text-xs font-semibold ${isBlocked ? 'text-rose-400' : 'text-slate-300'}`}>
+                <ShieldOff className={`w-4 h-4 ${isBlocked ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'}`} />
+                <span className={`text-xs font-semibold ${isBlocked ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-300'}`}>
                   {t.rule_block_all}
                 </span>
               </div>
@@ -194,7 +194,7 @@ export const RuleModal: React.FC<Props> = ({ target, onClose }) => {
                 type="checkbox"
                 checked={isBlocked}
                 onChange={(e) => setIsBlocked(e.target.checked)}
-                className="w-4 h-4 text-rose-500 rounded bg-dark-surface border-dark-border focus:ring-rose-500"
+                className="w-4 h-4 text-rose-500 rounded bg-white dark:bg-dark-surface border-transparent dark:border-dark-border focus:ring-rose-500"
               />
             </label>
           </div>
@@ -205,14 +205,14 @@ export const RuleModal: React.FC<Props> = ({ target, onClose }) => {
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-dark-card border border-dark-border text-xs font-semibold text-slate-300 hover:bg-dark-hover transition"
+            className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-dark-card border border-transparent dark:border-dark-border text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-dark-hover transition"
           >
             {t.rule_cancel}
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="px-5 py-2 rounded-xl bg-gradient-to-r from-brand-emerald to-brand-cyan text-dark-bg font-bold text-xs hover:opacity-90 transition shadow-lg shadow-brand-cyan/20"
+            className="px-5 py-2 rounded-xl bg-gradient-to-r from-brand-emerald to-brand-cyan text-slate-950 font-bold text-xs hover:opacity-90 transition shadow-lg shadow-brand-cyan/20"
           >
             {t.rule_save}
           </button>

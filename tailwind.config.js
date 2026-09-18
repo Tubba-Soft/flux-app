@@ -9,11 +9,20 @@ export default {
     extend: {
       colors: {
         dark: {
-          bg: '#0B0F17',
-          surface: '#121824',
-          card: '#182234',
-          border: '#223048',
-          hover: '#1F2C42'
+          bg: 'var(--bg-app)',
+          surface: 'var(--bg-surface)',
+          card: 'var(--bg-card)',
+          border: 'var(--border-app)',
+          hover: 'var(--bg-card-hover)'
+        },
+        theme: {
+          bg: 'var(--bg-app)',
+          surface: 'var(--bg-surface)',
+          card: 'var(--bg-card)',
+          border: 'var(--border-app)',
+          hover: 'var(--bg-card-hover)',
+          text: 'var(--text-main)',
+          muted: 'var(--text-muted)'
         },
         brand: {
           cyan: '#00F0FF',

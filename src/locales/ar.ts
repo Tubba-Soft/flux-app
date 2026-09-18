@@ -9,6 +9,11 @@ export const ar = {
   remote_locked_exit: "خروج من البرنامج",
   tubba_soft_platform: "منصة تبع سوفت للحلول البرمجية",
   
+  // ثيمات المظهر
+  theme_light: "وضع النهار",
+  theme_dark: "وضع الليل",
+  theme_system: "تلقائي (حسب النظام)",
+  
   // شريط الحالة
   status_kernel_active: "محرك تشكيل النواة نشط (Kernel Shaper)",
   status_passive_monitor: "وضع المراقبة اللحظية للمنافذ",

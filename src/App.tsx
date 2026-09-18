@@ -33,9 +33,9 @@ export const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-dark-bg select-none text-slate-100 overflow-hidden font-sans">
+    <div className="flex flex-col h-screen w-screen bg-dark-bg select-none text-slate-900 dark:text-slate-100 overflow-hidden font-sans">
       {isBrowserPreview && (
-        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 text-xs text-amber-300 flex items-center justify-between">
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="font-bold">⚠️ {isRtl ? 'وضع معاينة المتصفح:' : 'Browser Preview Mode:'}</span>
             <span>
@@ -62,20 +62,20 @@ export const AppContent: React.FC = () => {
       />
 
       {/* Bottom Status Bar */}
-      <footer className="bg-dark-surface/90 border-t border-dark-border/40 px-6 py-2 flex items-center justify-between text-[11px] text-slate-400 select-none">
+      <footer className="bg-dark-surface/90 border-t border-dark-border/40 px-6 py-2 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 select-none">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-brand-emerald animate-pulse" />
-            <span>Flux Engine v1.0.0</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">Flux Engine v1.0.0</span>
           </span>
-          <span className="text-dark-border">|</span>
+          <span className="text-slate-300 dark:text-slate-700">|</span>
           <span>{processes.length} Processes Tracked</span>
         </div>
 
         <div className="flex items-center gap-4">
           <span>WinDivert 2.2-A Kernel Shaper Layer</span>
-          <span className="text-dark-border">|</span>
-          <span className="text-slate-500 font-mono">100-300ms Ticker</span>
+          <span className="text-slate-300 dark:text-slate-700">|</span>
+          <span className="text-slate-500 dark:text-slate-400 font-mono">100-300ms Ticker</span>
         </div>
       </footer>
 

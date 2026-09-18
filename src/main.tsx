@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { TelemetryProvider } from './context/TelemetryContext';
 import './index.css';
@@ -21,11 +22,13 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     {isWidget ? (
       <TaskbarWidget />
     ) : (
-      <LanguageProvider>
-        <TelemetryProvider>
-          <App />
-        </TelemetryProvider>
-      </LanguageProvider>
+      <ThemeProvider>
+        <LanguageProvider>
+          <TelemetryProvider>
+            <App />
+          </TelemetryProvider>
+        </LanguageProvider>
+      </ThemeProvider>
     )}
   </React.StrictMode>
 );
