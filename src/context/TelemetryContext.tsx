@@ -134,14 +134,14 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     const setupTauriListeners = async () => {
       try {
-        console.log('[NetFlow] Attempting to connect to Tauri backend...');
+        console.log('[Flux] Attempting to connect to Tauri backend...');
         const { listen } = await import('@tauri-apps/api/event');
         const { invoke } = await import('@tauri-apps/api/core');
-        console.log('[NetFlow] Tauri API modules loaded successfully.');
+        console.log('[Flux] Tauri API modules loaded successfully.');
 
         // Initial fetch
         const initialStatus = await invoke<DriverStatus>('get_driver_status');
-        console.log('[NetFlow] Driver status:', initialStatus);
+        console.log('[Flux] Driver status:', initialStatus);
         setDriverStatus(initialStatus);
 
         const isAuto = await invoke<boolean>('get_autostart');
@@ -154,7 +154,7 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setTaskbarWidgetState(isWidget);
 
         const initialSnapshot = await invoke<ProcessTraffic[]>('get_telemetry_snapshot');
-        console.log('[NetFlow] Initial snapshot received:', initialSnapshot?.length, 'processes');
+        console.log('[Flux] Initial snapshot received:', initialSnapshot?.length, 'processes');
         if (initialSnapshot && initialSnapshot.length > 0) {
           setProcesses(initialSnapshot);
         }
@@ -163,7 +163,7 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         unlistenTelemetry = await listen<ProcessTraffic[]>('telemetry-update', (event) => {
           setProcesses(event.payload || []);
         });
-        console.log('[NetFlow] Live telemetry listener registered.');
+        console.log('[Flux] Live telemetry listener registered.');
 
         // Listen for true kernel-level global telemetry events
         let unlistenGlobal: (() => void) | undefined;
@@ -197,7 +197,7 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           if (unlistenGlobal) unlistenGlobal();
         };
       } catch (err) {
-        console.error('[NetFlow] Tauri backend connection FAILED:', err);
+        console.error('[Flux] Tauri backend connection FAILED:', err);
         setIsBrowserPreview(true);
         loadMockData();
       }

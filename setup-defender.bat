@@ -1,13 +1,13 @@
 @echo off
-title NetFlow Studio - Antivirus Setup
+title Flux - Antivirus Setup
 echo.
 echo =========================================================
-echo   NetFlow Studio - Windows Defender Setup
+echo   Flux - Windows Defender Setup
 echo   اعداد استثناء ويندوز ديفندر لمنع الحذف الخاطئ
 echo =========================================================
 echo.
 echo This script adds a Windows Defender exclusion for the
-echo NetFlow Studio folder to prevent false positive deletion
+echo Flux folder to prevent false positive deletion
 echo of the WinDivert network driver files.
 echo.
 echo يقوم هذا السكريبت بإضافة استثناء في ويندوز ديفندر
@@ -41,7 +41,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "  Write-Host '[OK] Exclusion added successfully!' -ForegroundColor Green; " ^
   "  Write-Host '[OK] تم اضافة الاستثناء بنجاح!' -ForegroundColor Green; " ^
   "  Write-Host ''; " ^
-  "  Write-Host 'You can now run NetFlow Studio without antivirus interference.' -ForegroundColor White; " ^
+  "  Write-Host 'You can now run Flux without antivirus interference.' -ForegroundColor White; " ^
   "  Write-Host 'يمكنك الآن تشغيل البرنامج بدون تدخل مكافح الفيروسات' -ForegroundColor White; " ^
   "} catch { " ^
   "  Write-Host ''; " ^

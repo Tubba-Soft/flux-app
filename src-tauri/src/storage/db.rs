@@ -15,10 +15,10 @@ impl Database {
         let db_path = match dirs_or_local() {
             Some(mut dir) => {
                 let _ = std::fs::create_dir_all(&dir);
-                dir.push("netflow_studio.db");
+                dir.push("flux.db");
                 dir
             }
-            None => PathBuf::from("netflow_studio.db"),
+            None => PathBuf::from("flux.db"),
         };
 
         let conn = Connection::open(&db_path)
@@ -232,7 +232,15 @@ impl Database {
 
 fn dirs_or_local() -> Option<PathBuf> {
     if let Ok(app_data) = std::env::var("APPDATA") {
-        Some(PathBuf::from(app_data).join("NetFlowStudio"))
+        let flux_dir = PathBuf::from(&app_data).join("Flux");
+        let old_dir = PathBuf::from(&app_data).join("NetFlowStudio");
+        let old_db = old_dir.join("netflow_studio.db");
+        let new_db = flux_dir.join("flux.db");
+        if old_db.exists() && !new_db.exists() {
+            let _ = std::fs::create_dir_all(&flux_dir);
+            let _ = std::fs::copy(&old_db, &new_db);
+        }
+        Some(flux_dir)
     } else {
         None
     }

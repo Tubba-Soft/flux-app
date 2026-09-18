@@ -687,9 +687,9 @@ fn main() {
     // Isolate WebView2 profile path by user integrity level to prevent 0x800700AA
     if let Ok(local) = std::env::var("LOCALAPPDATA") {
         let profile_dir = if is_admin {
-            std::path::PathBuf::from(local).join("com.netflowstudio.desktop").join("webview_admin")
+            std::path::PathBuf::from(local).join("com.tubbasoft.flux").join("webview_admin")
         } else {
-            std::path::PathBuf::from(local).join("com.netflowstudio.desktop").join("webview_user")
+            std::path::PathBuf::from(local).join("com.tubbasoft.flux").join("webview_user")
         };
         let _ = std::fs::create_dir_all(&profile_dir);
         let wv2_lock = profile_dir.join("EBWebView").join("lockfile");

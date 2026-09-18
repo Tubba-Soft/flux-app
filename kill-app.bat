@@ -1,5 +1,5 @@
 @echo off
-title NetFlow Studio - تحرير الملفات وايقاف الدرايفر
+title Flux - تحرير الملفات وايقاف الدرايفر
 
 :: فحص صلاحيات المسؤول، واذا لم تكن متوفرة يطلبها تلقائيا من الويندوز (UAC Prompt)
 net session >nul 2>&1
@@ -11,11 +11,12 @@ if %errorlevel% neq 0 (
 
 color 0A
 echo ========================================================
-echo   NetFlow Studio - تحرير ملفات البناء وايقاف WinDivert
+echo   Flux - تحرير ملفات البناء وايقاف WinDivert
 echo ========================================================
 echo.
 
 echo [1/2] اغلاق اي نسخة شغالة من التطبيق...
+taskkill /F /IM flux.exe >nul 2>&1
 taskkill /F /IM netflow-studio.exe >nul 2>&1
 
 echo [2/2] ايقاف خدمة تعريف النواة WinDivert...

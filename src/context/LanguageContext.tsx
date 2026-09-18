@@ -17,13 +17,13 @@ const LanguageContext = createContext<LanguageContextType | null>(null);
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [lang, setLangState] = useState<Language>(() => {
-    const saved = localStorage.getItem('netflow_lang');
+    const saved = localStorage.getItem('flux_lang') || localStorage.getItem('netflow_lang');
     return (saved === 'ar' || saved === 'en') ? saved : 'ar'; // Default to Arabic as requested
   });
 
   const setLang = (l: Language) => {
     setLangState(l);
-    localStorage.setItem('netflow_lang', l);
+    localStorage.setItem('flux_lang', l);
   };
 
   const toggleLang = () => {
