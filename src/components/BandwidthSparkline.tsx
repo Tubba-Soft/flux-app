@@ -34,7 +34,7 @@ export const BandwidthSparkline: React.FC<Props> = ({ currentDown, currentUp, ma
   const upPoints = getPoints(upHistory.current);
 
   return (
-    <div className="relative w-full h-12 bg-dark-bg/60 rounded-lg border border-dark-border/40 p-1 overflow-hidden">
+    <div className="relative w-full h-12 bg-slate-100/90 dark:bg-[#090D16]/60 rounded-xl border border-transparent dark:border-slate-800/40 p-1 overflow-hidden">
       <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
         <defs>
           <linearGradient id="downGrad" x1="0" y1="0" x2="0" y2="1">

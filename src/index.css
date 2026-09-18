@@ -4,30 +4,30 @@
 
 :root {
   /* Light Mode (Zero Borders, Clean Minimalist Elevation) */
-  --bg-app: #F4F6F9;
+  --bg-app: #F8FAFC;
   --bg-surface: #FFFFFF;
   --bg-card: #FFFFFF;
-  --bg-card-hover: #EDF2F7;
+  --bg-card-hover: #F1F5F9;
   --bg-row-alt: #F8FAFC;
   --text-main: #0F172A;
-  --text-muted: #475569;
+  --text-muted: #64748B;
   --border-app: transparent;
-  --scrollbar-track: #E2E8F0;
+  --scrollbar-track: #F1F5F9;
   --scrollbar-thumb: #CBD5E1;
   --scrollbar-thumb-hover: #94A3B8;
 }
 
 html.dark {
-  /* Dark Mode (Cyber Glassmorphic Navy) */
-  --bg-app: #0B0F17;
-  --bg-surface: #121824;
-  --bg-card: #182234;
-  --bg-card-hover: #1F2C42;
-  --bg-row-alt: #141C2B;
+  /* Dark Mode (Cyber Navy) */
+  --bg-app: #090D16;
+  --bg-surface: #0F1626;
+  --bg-card: #141C2E;
+  --bg-card-hover: #1C2740;
+  --bg-row-alt: #0C1220;
   --text-main: #F8FAFC;
   --text-muted: #94A3B8;
-  --border-app: #223048;
-  --scrollbar-track: #0E1420;
+  --border-app: #1F2C46;
+  --scrollbar-track: #090D16;
   --scrollbar-thumb: #1E293B;
   --scrollbar-thumb-hover: #334155;
 }

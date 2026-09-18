@@ -33,7 +33,7 @@ export const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-dark-bg select-none text-slate-900 dark:text-slate-100 overflow-hidden font-sans">
+    <div className="flex flex-col h-screen w-screen bg-slate-100 dark:bg-[#090D16] select-none text-slate-900 dark:text-slate-100 overflow-hidden font-sans">
       {isBrowserPreview && (
         <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -62,7 +62,7 @@ export const AppContent: React.FC = () => {
       />
 
       {/* Bottom Status Bar */}
-      <footer className="bg-dark-surface/90 border-t border-dark-border/40 px-6 py-2 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 select-none">
+      <footer className="bg-white/80 dark:bg-[#0C1220]/90 border-t border-transparent dark:border-slate-800/60 px-6 py-2 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 select-none shadow-sm dark:shadow-none">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-brand-emerald animate-pulse" />

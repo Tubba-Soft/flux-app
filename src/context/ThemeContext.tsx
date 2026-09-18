@@ -18,7 +18,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (saved === 'light' || saved === 'dark' || saved === 'system') {
       return saved;
     }
-    return 'system'; // Default to system-synchronized mode
+    return 'dark'; // Default to Cyber Dark mode
   });
 
   const [actualTheme, setActualTheme] = useState<ActualTheme>('dark');
