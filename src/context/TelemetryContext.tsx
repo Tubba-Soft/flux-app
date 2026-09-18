@@ -10,7 +10,7 @@ export interface RemoteLockInfo {
 }
 
 const APP_VERSION = '1.0.0';
-const REMOTE_CONTROL_URL = 'https://raw.githubusercontent.com/Tubba-Soft/flux/main/app-control.json';
+const REMOTE_CONTROL_URL = 'https://raw.githubusercontent.com/Tubba-Soft/flux-app/main/app-control.json';
 
 function isVersionOlder(current: string, minRequired: string): boolean {
   if (!minRequired) return false;
