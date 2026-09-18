@@ -25,10 +25,15 @@ export const AppContent: React.FC = () => {
 
   const handleExitApp = async () => {
     try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      await getCurrentWindow().close();
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('force_exit_app');
     } catch {
-      window.close();
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().close();
+      } catch {
+        window.close();
+      }
     }
   };
 

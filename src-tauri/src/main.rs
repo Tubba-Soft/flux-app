@@ -152,7 +152,7 @@ fn open_external_url(url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn enforce_remote_lockdown(state: State<AppState>, reason: String) -> Result<(), String> {
+fn enforce_remote_lockdown(app_handle: AppHandle, state: State<AppState>, reason: String) -> Result<(), String> {
     warn!("[RemoteLockdown] Enforcing kill-switch lockdown: {}", reason);
     // 1. Immediately stop WinDivert packet engine to release network and ensure user has normal internet
     let _ = state.packet_engine.stop();
@@ -164,7 +164,43 @@ fn enforce_remote_lockdown(state: State<AppState>, reason: String) -> Result<(),
         status.mode = "remote_lockdown".to_string();
         status.error_message = Some(format!("Remote lockdown active: {}", reason));
     }
+
+    // 3. Hide widget window if active
+    if let Some(widget_win) = app_handle.get_webview_window("widget") {
+        let _ = widget_win.hide();
+    }
+
+    // 4. Show and focus main window so user sees the notification immediately
+    if let Some(main_win) = app_handle.get_webview_window("main") {
+        let _ = main_win.show();
+        let _ = main_win.unminimize();
+        let _ = main_win.set_focus();
+    }
     Ok(())
+}
+
+#[tauri::command]
+fn release_remote_lockdown(app_handle: AppHandle, state: State<AppState>) -> Result<(), String> {
+    info!("[RemoteLockdown] Releasing kill-switch lockdown - restoring engine");
+    {
+        let mut status = state.driver_status.write();
+        if status.mode == "remote_lockdown" {
+            status.mode = "passive_monitor".to_string();
+            status.error_message = None;
+        }
+    }
+    // Restore widget window if it was enabled
+    if state.show_taskbar_widget.load(Ordering::Relaxed) {
+        if let Some(widget_win) = app_handle.get_webview_window("widget") {
+            let _ = widget_win.show();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn force_exit_app() {
+    std::process::exit(0);
 }
 
 fn format_speed_label(bps: u64) -> String {
@@ -1034,6 +1070,8 @@ fn main() {
             request_admin_elevation,
             open_external_url,
             enforce_remote_lockdown,
+            release_remote_lockdown,
+            force_exit_app,
             get_autostart,
             set_autostart,
             get_run_in_background,

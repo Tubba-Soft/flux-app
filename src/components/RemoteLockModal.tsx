@@ -3,13 +3,9 @@ import { AlertTriangle, ExternalLink, Power, ShieldAlert, Globe } from 'lucide-r
 import { useLanguage } from '../context/LanguageContext';
 import { openExternalLink } from '../utils/navigation';
 
-export interface RemoteLockInfo {
-  isLocked: boolean;
-  title: string;
-  message: string;
-  actionUrl: string;
-  actionLabel: string;
-}
+import { RemoteLockInfo } from '../context/TelemetryContext';
+
+export type { RemoteLockInfo };
 
 interface Props {
   lockInfo: RemoteLockInfo;
@@ -20,6 +16,18 @@ export const RemoteLockModal: React.FC<Props> = ({ lockInfo, onExitApp }) => {
   const { isRtl, t } = useLanguage();
 
   if (!lockInfo.isLocked) return null;
+
+  const title = isRtl
+    ? (lockInfo.titleAr || lockInfo.title || t.remote_locked_title)
+    : (lockInfo.titleEn || lockInfo.title || 'Developer Notice');
+
+  const message = isRtl
+    ? (lockInfo.messageAr || lockInfo.message || t.remote_locked_default_msg)
+    : (lockInfo.messageEn || lockInfo.message || 'This version has been suspended by the developer.');
+
+  const actionLabel = isRtl
+    ? (lockInfo.actionLabelAr || lockInfo.actionLabel || t.remote_locked_action)
+    : (lockInfo.actionLabelEn || lockInfo.actionLabel || 'Download Update Now');
 
   const handleAction = () => {
     if (lockInfo.actionUrl) {
@@ -67,12 +75,12 @@ export const RemoteLockModal: React.FC<Props> = ({ lockInfo, onExitApp }) => {
 
         {/* Title */}
         <h2 className="text-2xl font-black text-white tracking-tight mb-3">
-          {lockInfo.title || t.remote_locked_title}
+          {title}
         </h2>
 
         {/* Message Card */}
         <div className="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-5 mb-6 text-slate-300 text-sm leading-relaxed text-start shadow-inner">
-          <p>{lockInfo.message || t.remote_locked_default_msg}</p>
+          <p>{message}</p>
           <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
             <span>{isRtl ? 'حالة درايفر النواة:' : 'Kernel Status:'}</span>
             <span className="text-emerald-400 font-semibold">
@@ -87,7 +95,7 @@ export const RemoteLockModal: React.FC<Props> = ({ lockInfo, onExitApp }) => {
             onClick={handleAction}
             className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-brand-cyan to-brand-purple hover:brightness-110 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-brand-cyan/20 hover:shadow-brand-cyan/30 transition cursor-pointer"
           >
-            <span>{lockInfo.actionLabel || t.remote_locked_action}</span>
+            <span>{actionLabel}</span>
             <ExternalLink className="w-4 h-4" />
           </button>
 

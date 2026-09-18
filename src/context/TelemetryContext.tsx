@@ -4,13 +4,20 @@ import { ProcessTraffic, StreamTraffic, DriverStatus, AppRule, StreamRule, NewAp
 export interface RemoteLockInfo {
   isLocked: boolean;
   title: string;
+  titleAr?: string;
+  titleEn?: string;
   message: string;
+  messageAr?: string;
+  messageEn?: string;
   actionUrl: string;
   actionLabel: string;
+  actionLabelAr?: string;
+  actionLabelEn?: string;
 }
 
 const APP_VERSION = '1.0.0';
 const REMOTE_CONTROL_URL = 'https://raw.githubusercontent.com/Tubba-Soft/flux-app/main/app-control.json';
+const GITHUB_API_URL = 'https://api.github.com/repos/Tubba-Soft/flux-app/contents/app-control.json';
 
 function isVersionOlder(current: string, minRequired: string): boolean {
   if (!minRequired) return false;
@@ -80,20 +87,71 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     actionLabel: '',
   });
 
-  // Remote Kill-Switch & Version Deprecation Poller
+  // Remote Kill-Switch & Version Deprecation Poller (Real-Time 8-second ticker)
   useEffect(() => {
-    const verifyRemoteStatus = async () => {
+    let isMounted = true;
+
+    const fetchControlData = async () => {
+      // 1. Primary: Direct raw fetch with cache-busting timestamp and strict no-cache headers
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-        const res = await fetch(REMOTE_CONTROL_URL, {
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const url = `${REMOTE_CONTROL_URL}?_t=${Date.now()}`;
+        const res = await fetch(url, {
           signal: controller.signal,
           cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+          },
         });
         clearTimeout(timeoutId);
 
-        if (!res.ok) return;
-        const data = await res.json();
+        if (res.ok) {
+          const data = await res.json();
+          return data;
+        }
+      } catch (err) {
+        console.warn('[Flux] Primary raw.githubusercontent.com fetch failed, attempting GitHub API fallback...', err);
+      }
+
+      // 2. Fallback: GitHub Contents API (completely bypasses Fastly CDN)
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(`${GITHUB_API_URL}?_t=${Date.now()}`, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Flux-Desktop-App',
+            'Accept': 'application/vnd.github.v3+json',
+          },
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const apiData = await res.json();
+          if (apiData && apiData.content) {
+            const decodedStr = decodeURIComponent(
+              atob(apiData.content.replace(/\s/g, ''))
+                .split('')
+                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join('')
+            );
+            return JSON.parse(decodedStr);
+          }
+        }
+      } catch (err) {
+        console.warn('[Flux] GitHub Contents API fallback failed:', err);
+      }
+
+      return null;
+    };
+
+    const verifyRemoteStatus = async () => {
+      try {
+        const data = await fetchControlData();
+        if (!data || !isMounted) return;
 
         const shouldLock =
           data.kill_all === true ||
@@ -103,10 +161,16 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         if (shouldLock) {
           const lockState: RemoteLockInfo = {
             isLocked: true,
-            title: data.notice_title_ar || data.notice_title_en || 'تنبيه من المطور',
+            title: data.notice_title_ar || data.notice_title_en || 'تنبيه هام من المطور',
+            titleAr: data.notice_title_ar,
+            titleEn: data.notice_title_en,
             message: data.notice_msg_ar || data.notice_msg_en || 'تم إيقاف هذا الإصدار من قبل المطور.',
+            messageAr: data.notice_msg_ar,
+            messageEn: data.notice_msg_en,
             actionUrl: data.action_url || 'https://tubbasoft.com',
             actionLabel: data.action_label_ar || data.action_label_en || 'تحميل التحديث الآن',
+            actionLabelAr: data.action_label_ar,
+            actionLabelEn: data.action_label_en,
           };
           setRemoteLockInfo(lockState);
 
@@ -116,16 +180,53 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           } catch (e) {
             console.warn('Failed to call enforce_remote_lockdown:', e);
           }
+
+          // Bring main window to front and focus
+          try {
+            const { getCurrentWindow } = await import('@tauri-apps/api/window');
+            const win = getCurrentWindow();
+            await win.show();
+            await win.unminimize();
+            await win.setFocus();
+          } catch (e) {
+            // ignore
+          }
+        } else {
+          // If previously locked, unlock immediately in real-time
+          setRemoteLockInfo((prev) => {
+            if (prev.isLocked) {
+              return {
+                isLocked: false,
+                title: '',
+                message: '',
+                actionUrl: 'https://tubbasoft.com',
+                actionLabel: '',
+              };
+            }
+            return prev;
+          });
+
+          try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('release_remote_lockdown');
+          } catch (e) {
+            // ignore
+          }
         }
       } catch (err) {
-        // Offline or unreachable - network monitor continues safely
-        console.log('[Flux] Remote control check skipped (offline or unreachable)');
+        console.warn('[Flux] Remote control check skipped (offline or error):', err);
       }
     };
 
+    // Check immediately on startup
     verifyRemoteStatus();
-    const interval = setInterval(verifyRemoteStatus, 30 * 60 * 1000);
-    return () => clearInterval(interval);
+
+    // Check every 8 seconds for real-time responsiveness without app restart!
+    const interval = setInterval(verifyRemoteStatus, 8 * 1000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
