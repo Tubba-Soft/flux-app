@@ -1,5 +1,5 @@
 {
-  "kill_all": true,
+  "kill_all": false,
   "min_required_version": "1.0.0",
   "disabled_versions": [],
   "notice_title_ar": "تنبيه هام من المطور",
