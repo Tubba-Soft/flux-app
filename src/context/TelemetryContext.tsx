@@ -221,8 +221,8 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // Check immediately on startup
     verifyRemoteStatus();
 
-    // Check every 8 seconds for real-time responsiveness without app restart!
-    const interval = setInterval(verifyRemoteStatus, 8 * 1000);
+    // Check every 60 seconds for remote control updates (reduced from 8s to save CPU/network)
+    const interval = setInterval(verifyRemoteStatus, 60 * 1000);
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -498,7 +498,7 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           };
         })
       );
-    }, 400);
+    }, 1500);
 
     return () => clearInterval(interval);
   };

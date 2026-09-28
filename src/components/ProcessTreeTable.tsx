@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { ProcessTraffic, StreamTraffic, SortField, SortDirection } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { useTelemetry } from '../context/TelemetryContext';
@@ -52,23 +52,38 @@ export const ProcessTreeTable: React.FC<Props> = ({
   // State: active menu dropdown
   const [activeMenuPid, setActiveMenuPid] = useState<number | null>(null);
 
-  const toggleExpand = (pid: number) => {
+  const toggleExpand = useCallback((pid: number) => {
     setExpandedPids((prev) => {
       const next = new Set(prev);
       if (next.has(pid)) next.delete(pid);
       else next.add(pid);
       return next;
     });
-  };
+  }, []);
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('desc');
-    }
-  };
+  const handleSort = useCallback((field: SortField) => {
+    setSortField((prevField) => {
+      if (prevField === field) {
+        setSortDirection((d) => d === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortDirection('desc');
+      }
+      return field;
+    });
+  }, []);
+
+  // Close dropdown on click outside
+  const tableRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (activeMenuPid === null) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
+        setActiveMenuPid(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeMenuPid]);
 
   // Filter & Sort processes
   const filteredAndSortedProcesses = useMemo(() => {
@@ -126,7 +141,7 @@ export const ProcessTreeTable: React.FC<Props> = ({
   }, [processes, searchQuery, sortField, sortDirection]);
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-100/60 dark:bg-[#090D16]">
+    <div ref={tableRef} className="flex-1 flex flex-col overflow-hidden bg-slate-100/60 dark:bg-[#090D16]">
       {/* Search & Sort Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-white/70 dark:bg-[#0C1220]/80 border-b border-transparent dark:border-slate-800/60 backdrop-blur-sm">
         {/* Search */}
@@ -175,7 +190,7 @@ export const ProcessTreeTable: React.FC<Props> = ({
       </div>
 
       {/* Table Container with Horizontal Scroll support */}
-      <div className="flex-1 flex flex-col overflow-x-auto overflow-y-hidden">
+      <div className="flex-1 flex flex-col overflow-x-auto overflow-y-auto" style={{ willChange: 'transform' }}>
         <div className="min-w-[980px] flex flex-col flex-1">
           {/* Table Header */}
           <div className="grid grid-cols-[minmax(260px,1.4fr)_130px_110px_110px_110px_140px_50px_40px] items-center px-6 py-2.5 bg-slate-200/60 dark:bg-[#0C1220] border-b border-transparent dark:border-slate-800/80 text-xs font-semibold text-slate-700 dark:text-slate-400 select-none shadow-sm dark:shadow-none">

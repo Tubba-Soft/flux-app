@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use dashmap::DashMap;
 use parking_lot::RwLock;
-use log::{debug, info};
+use log::{debug, info, warn};
 
 pub enum ShaperDecision {
     Pass,
@@ -67,6 +67,27 @@ impl Bucket {
     }
 }
 
+/// Essential ports that must NEVER be blocked on system processes to keep internet working.
+/// DNS (53), DHCP (67, 68), NTP (123), LLMNR (5355), mDNS (5353), NetBIOS (137, 138, 139)
+const CRITICAL_PORTS: &[u16] = &[53, 67, 68, 123, 5353, 5355, 137, 138, 139];
+
+/// Check if a process path is a critical Windows system process (svchost, lsass, etc.)
+#[inline]
+fn is_critical_system_process(path: &str) -> bool {
+    let lower = path.to_lowercase();
+    let basename = lower.rsplit('\\').next().unwrap_or(&lower);
+    matches!(
+        basename,
+        "svchost.exe" | "lsass.exe" | "csrss.exe" | "services.exe" | "wininit.exe" | "system"
+    )
+}
+
+/// Check if either port in a connection is a critical infrastructure port
+#[inline]
+fn is_critical_port(local_port: u16, remote_port: u16) -> bool {
+    CRITICAL_PORTS.contains(&local_port) || CRITICAL_PORTS.contains(&remote_port)
+}
+
 pub struct TokenBucketShaper {
     /// Inbound (download) process buckets: path -> RwLock<Bucket>
     process_down_buckets: DashMap<String, Arc<RwLock<Bucket>>>,
@@ -104,6 +125,9 @@ impl TokenBucketShaper {
         up_limit_kbps: Option<u64>,
     ) {
         if is_blocked {
+            if is_critical_system_process(path) {
+                info!("[Shaper] Blocking critical system process {} - DNS/DHCP/NTP ports will be auto-whitelisted", path);
+            }
             self.blocked_paths.insert(path.to_string(), true);
         } else {
             self.blocked_paths.remove(path);
@@ -179,7 +203,7 @@ impl TokenBucketShaper {
         }
     }
 
-    /// Evaluate packet through process-level and stream-level rules
+    /// Legacy evaluate_packet without port awareness (fallback, still works)
     pub fn evaluate_packet(
         &self,
         exe_path: Option<&str>,
@@ -187,10 +211,34 @@ impl TokenBucketShaper {
         is_outbound: bool,
         packet_len: usize,
     ) -> ShaperDecision {
+        self.evaluate_packet_with_ports(exe_path, stream_id, is_outbound, packet_len, 0, 0)
+    }
+
+    /// Evaluate packet with port-aware critical system protection.
+    /// When a critical system process (svchost, lsass, etc.) is blocked, DNS/DHCP/NTP
+    /// traffic is automatically passed through to prevent total internet outage.
+    pub fn evaluate_packet_with_ports(
+        &self,
+        exe_path: Option<&str>,
+        stream_id: &str,
+        is_outbound: bool,
+        packet_len: usize,
+        local_port: u16,
+        remote_port: u16,
+    ) -> ShaperDecision {
         // 1. Check if entity is blocked
         if let Some(path) = exe_path {
             if self.blocked_paths.contains_key(path) {
-                return ShaperDecision::Drop;
+                // CRITICAL SAFETY: If this is a system process (svchost, etc.),
+                // automatically whitelist essential infrastructure ports (DNS, DHCP, NTP)
+                // so blocking svchost stops Windows Update/telemetry but NOT internet!
+                if is_critical_system_process(path) && is_critical_port(local_port, remote_port) {
+                    // Allow this packet through - it's essential infrastructure
+                    debug!("[Shaper] Allowing critical port {}:{} for blocked system process {}",
+                        local_port, remote_port, path);
+                } else {
+                    return ShaperDecision::Drop;
+                }
             }
         }
         if self.blocked_streams.contains_key(stream_id) {

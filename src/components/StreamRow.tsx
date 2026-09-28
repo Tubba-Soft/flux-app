@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { StreamTraffic } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { useTelemetry } from '../context/TelemetryContext';
@@ -19,7 +19,7 @@ interface Props {
   onOpenRuleModal: (stream: StreamTraffic) => void;
 }
 
-export const StreamRow: React.FC<Props> = ({ stream, onOpenRuleModal }) => {
+const StreamRowInner: React.FC<Props> = ({ stream, onOpenRuleModal }) => {
   const { t, isRtl } = useLanguage();
   const { updateStreamRule, closeSocket } = useTelemetry();
   const [isClosing, setIsClosing] = useState(false);
@@ -155,3 +155,20 @@ export const StreamRow: React.FC<Props> = ({ stream, onOpenRuleModal }) => {
     </div>
   );
 };
+
+// Memoized StreamRow: only re-renders when stream data actually changes
+export const StreamRow = memo(StreamRowInner, (prev, next) => {
+  const ps = prev.stream;
+  const ns = next.stream;
+  return (
+    ps.id === ns.id &&
+    ps.down_speed_bps === ns.down_speed_bps &&
+    ps.up_speed_bps === ns.up_speed_bps &&
+    ps.total_down_bytes === ns.total_down_bytes &&
+    ps.total_up_bytes === ns.total_up_bytes &&
+    ps.is_blocked === ns.is_blocked &&
+    ps.down_limit_kbps === ns.down_limit_kbps &&
+    ps.up_limit_kbps === ns.up_limit_kbps &&
+    ps.state === ns.state
+  );
+});

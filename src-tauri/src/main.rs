@@ -43,6 +43,8 @@ pub struct AppState {
     pub app_rules_cache: Arc<DashMap<String, AppRule>>,
     pub stream_rules_cache: Arc<DashMap<String, StreamRule>>,
     pub show_taskbar_widget: Arc<AtomicBool>,
+    /// Icon cache: path -> base64 icon string (prevents re-extracting icons every telemetry cycle)
+    pub icon_cache: Arc<DashMap<String, Option<String>>>,
 }
 
 #[tauri::command]
@@ -468,6 +470,16 @@ fn get_global_telemetry(state: State<AppState>) -> GlobalTelemetry {
     }
 }
 
+/// Helper: get icon from cache or extract and cache it (prevents re-extracting every cycle)
+fn get_cached_icon(icon_cache: &DashMap<String, Option<String>>, path: &str) -> Option<String> {
+    if let Some(entry) = icon_cache.get(path) {
+        return entry.value().clone();
+    }
+    let icon = extract_icon_base64(path);
+    icon_cache.insert(path.to_string(), icon.clone());
+    icon
+}
+
 /// Helper to aggregate active IP sockets and packet engine metrics into hierarchical tree
 fn build_telemetry_tree(state: &AppState) -> Vec<ProcessTraffic> {
     use std::collections::HashMap;
@@ -477,6 +489,7 @@ fn build_telemetry_tree(state: &AppState) -> Vec<ProcessTraffic> {
     // Fast in-memory lookup for rules (Zero SQLite disk contention)
     let rules_by_path = &state.app_rules_cache;
     let rules_by_stream = &state.stream_rules_cache;
+    let icon_cache = &state.icon_cache;
 
     // Helper closure to ensure ProcessTraffic exists
     let mut ensure_proc = |proc_map: &mut HashMap<u32, ProcessTraffic>, pid: u32, known_path: Option<&str>, known_name: Option<&str>| {
@@ -501,7 +514,8 @@ fn build_telemetry_tree(state: &AppState) -> Vec<ProcessTraffic> {
                 get_process_name_from_path(&path)
             };
 
-            let icon = extract_icon_base64(&path);
+            // Use icon cache to prevent re-extracting every cycle (major CPU/RAM savings)
+            let icon = get_cached_icon(icon_cache, &path);
             let (is_blocked, down_limit, up_limit, priority) = if let Some(rule) = rules_by_path.get(&path) {
                 (rule.is_blocked, rule.down_limit_kbps, rule.up_limit_kbps, rule.priority.clone())
             } else {
@@ -824,6 +838,8 @@ fn main() {
         error_message: err_msg,
     }));
 
+    let icon_cache: Arc<DashMap<String, Option<String>>> = Arc::new(DashMap::new());
+
     let app_state = AppState {
         ip_resolver: ip_resolver.clone(),
         shaper: shaper.clone(),
@@ -834,6 +850,7 @@ fn main() {
         app_rules_cache: app_rules_cache.clone(),
         stream_rules_cache: stream_rules_cache.clone(),
         show_taskbar_widget: show_taskbar_widget.clone(),
+        icon_cache: icon_cache.clone(),
     };
 
     // Start background IP Helper polling loop (every 500ms)
@@ -1040,6 +1057,49 @@ fn main() {
                             info!("[Telemetry] Emitting {} processes, {} streams to frontend (Live Down: {} bps, Up: {} bps)", tree.len(), total_streams, g_down_speed, g_up_speed);
                         }
                         let _ = handle.emit("telemetry-update", &tree);
+                    }
+
+                    // Periodic cleanup: Prune dead processes from packet_engine every ~30 seconds
+                    // This prevents stale PIDs from accumulating and consuming RAM
+                    if emit_counter % 60 == 0 {
+                        let mut dead_pids = Vec::new();
+                        for entry in pe.processes.iter() {
+                            let pid = *entry.key();
+                            if pid > 4 {
+                                // Check if the process is still alive via OpenProcess
+                                let is_alive = unsafe {
+                                    let handle = windows_sys::Win32::System::Threading::OpenProcess(
+                                        0x0400, // PROCESS_QUERY_INFORMATION
+                                        0,
+                                        pid,
+                                    );
+                                    if handle.is_null() || handle == 0 as _ {
+                                        false
+                                    } else {
+                                        windows_sys::Win32::Foundation::CloseHandle(handle);
+                                        true
+                                    }
+                                };
+                                if !is_alive {
+                                    dead_pids.push(pid);
+                                }
+                            }
+                        }
+                        for pid in &dead_pids {
+                            pe.processes.remove(pid);
+                        }
+                        if !dead_pids.is_empty() {
+                            info!("[Cleanup] Removed {} dead process entries from memory", dead_pids.len());
+                        }
+                    }
+
+                    // Periodic icon cache cleanup: clear every ~5 minutes to refresh stale icons
+                    if emit_counter % 600 == 0 {
+                        let cache_size = state_for_telemetry.icon_cache.len();
+                        if cache_size > 100 {
+                            state_for_telemetry.icon_cache.clear();
+                            info!("[Cleanup] Cleared icon cache ({} entries)", cache_size);
+                        }
                     }
                 }
             });

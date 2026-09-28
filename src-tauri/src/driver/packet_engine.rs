@@ -244,12 +244,14 @@ impl PacketEngine {
                                 packet_len as u64,
                             );
 
-                            // Token Bucket evaluation
-                            let decision = shaper.evaluate_packet(
+                            // Token Bucket evaluation (with port-aware critical system protection)
+                            let decision = shaper.evaluate_packet_with_ports(
                                 exe_path.as_deref(),
                                 &stream_id,
                                 is_outbound,
                                 packet_len,
+                                local_port,
+                                remote_port,
                             );
 
                             match decision {
