@@ -57,7 +57,12 @@ impl Bucket {
 
             // If required delay is within 500ms, queue the delay
             if wait_secs <= 0.5 {
-                self.tokens -= size; // allow slight token deficit
+                self.tokens -= size;
+                // SAFETY: Clamp tokens to -capacity to prevent deep deficit spiral
+                // that would cause all subsequent packets to be dropped until full recovery
+                if self.tokens < -self.capacity {
+                    self.tokens = -self.capacity;
+                }
                 ShaperDecision::Delay(Duration::from_secs_f64(wait_secs))
             } else {
                 // Buffer overflow / too deep deficit -> drop packet to enforce strict cap

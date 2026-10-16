@@ -228,6 +228,20 @@ impl Database {
             Err(_) => Vec::new(),
         }
     }
+
+    /// Remove all stale stream rules from the database.
+    /// Stream IDs are ephemeral (based on port numbers that change every session),
+    /// so old blocked/throttled stream rules can match new unrelated connections
+    /// and cause phantom internet outages. Must be called on startup!
+    pub fn cleanup_stale_stream_rules(&self) -> Result<usize, String> {
+        let conn = self.conn.lock();
+        let deleted = conn.execute("DELETE FROM stream_rules", [])
+            .map_err(|e| format!("Failed to cleanup stream_rules: {}", e))?;
+        if deleted > 0 {
+            info!("[DB] Cleaned up {} stale stream rules to prevent phantom blocks", deleted);
+        }
+        Ok(deleted)
+    }
 }
 
 fn dirs_or_local() -> Option<PathBuf> {

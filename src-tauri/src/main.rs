@@ -787,6 +787,10 @@ fn main() {
     }
 
     let stream_rules_cache = Arc::new(DashMap::new());
+    // CRITICAL: Clean up stale stream rules from previous sessions.
+    // Stream IDs use ephemeral ports that change every session, so old blocked rules
+    // can match new unrelated connections and cause phantom internet outages.
+    let _ = db.cleanup_stale_stream_rules();
     for rule in db.get_all_stream_rules() {
         shaper.update_stream_rule(
             &rule.stream_id,
@@ -1148,6 +1152,17 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error building tauri application")
         .run(move |_app_handle, event| {
+            match event {
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+                    // CRITICAL: Stop WinDivert on exit to release all intercepted packets.
+                    // Without this, WinDivert keeps capturing packets with no one to reinject
+                    // them, killing the internet until reboot or driver unload.
+                    info!("[Exit] Stopping WinDivert packet engine...");
+                    packet_engine.stop();
+                    info!("[Exit] WinDivert stopped cleanly, network restored.");
+                }
+                _ => {}
+            }
             let log_p = std::env::temp_dir().join("flux.log");
             let _ = std::fs::OpenOptions::new().append(true).open(&log_p).map(|mut f| {
                 use std::io::Write;

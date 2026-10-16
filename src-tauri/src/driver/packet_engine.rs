@@ -147,21 +147,29 @@ impl PacketEngine {
         let ip_resolver = self.ip_resolver.clone();
         let shaper = self.shaper.clone();
         let detector = self.detector.clone();
+        // Share the handle via Arc so stop() invalidation is seen by all threads immediately
+        let handle_arc = self.handle.clone();
 
-        let (delay_tx, delay_rx) = std::sync::mpsc::sync_channel::<DelayedPacket>(4096);
+        let (delay_tx, delay_rx) = std::sync::mpsc::sync_channel::<DelayedPacket>(16384);
         let delay_lib = lib.clone();
         let is_running_delay = self.is_running.clone();
+        let delay_handle_arc = self.handle.clone();
 
         // Dedicated background worker for delayed (throttled) packets so recv loop NEVER blocks!
         std::thread::spawn(move || {
             while is_running_delay.load(Ordering::Relaxed) {
                 match delay_rx.recv_timeout(Duration::from_millis(10)) {
                     Ok(pkt) => {
+                        // Read handle from Arc so we see stop() invalidation immediately
+                        let h = match *delay_handle_arc.read() {
+                            Some(h) => h,
+                            None => continue, // Handle closed by stop(), skip this packet
+                        };
                         let now = Instant::now();
                         if pkt.send_at > now {
                             std::thread::sleep(pkt.send_at - now);
                         }
-                        let _ = delay_lib.send(handle, &pkt.data, &pkt.addr);
+                        let _ = delay_lib.send(h, &pkt.data, &pkt.addr);
                     }
                     Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                     Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
@@ -177,7 +185,12 @@ impl PacketEngine {
             let mut addr = WinDivertAddress::new();
 
             while is_running.load(Ordering::Relaxed) {
-                match lib.recv(handle, &mut packet_buf, &mut addr) {
+                // Read handle from Arc so we see stop() invalidation immediately
+                let current_handle = match *handle_arc.read() {
+                    Some(h) => h,
+                    None => break, // Handle closed by stop(), exit loop cleanly
+                };
+                match lib.recv(current_handle, &mut packet_buf, &mut addr) {
                     Ok(packet_len) => {
                         packet_counter.fetch_add(1, Ordering::Relaxed);
                         byte_counter.fetch_add(packet_len as u64, Ordering::Relaxed);
@@ -267,17 +280,20 @@ impl PacketEngine {
                                         addr,
                                     };
                                     if let Err(_) = delay_tx.try_send(delayed) {
-                                        debug!("Delay queue full, dropping excess packet to preserve network stability");
+                                        // SAFETY: Send packet immediately instead of dropping!
+                                        // Dropping packets causes phantom internet outages.
+                                        warn!("Delay queue full, sending packet immediately to prevent internet outage");
+                                        let _ = lib.send(current_handle, packet_slice, &addr);
                                     }
                                 }
                                 ShaperDecision::Pass => {
-                                    if let Err(e) = lib.send(handle, packet_slice, &addr) {
+                                    if let Err(e) = lib.send(current_handle, packet_slice, &addr) {
                                         warn!("WinDivert send error: {}", e);
                                     }
                                 }
                             }
                         } else {
-                            if let Err(e) = lib.send(handle, packet_slice, &addr) {
+                            if let Err(e) = lib.send(current_handle, packet_slice, &addr) {
                                 warn!("WinDivert send (passthrough) error: {}", e);
                             }
                         }
@@ -291,7 +307,7 @@ impl PacketEngine {
                 }
             }
 
-            lib.close(handle);
+            // Handle is closed by stop() only - do NOT close here to prevent double-close!
             info!("WinDivert packet loop stopped cleanly");
         });
 
