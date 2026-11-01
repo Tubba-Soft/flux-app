@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sliders, Lock, Move, Palette, Clock, Check, X, Compass } from 'lucide-react';
+import { Sliders, Lock, Move, Palette, Clock, Check, X, Compass, PanelBottom, AlertTriangle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { WidgetConfig } from '../types';
 
@@ -62,7 +62,7 @@ export const COLOR_THEMES = [
 ];
 
 export const PRESET_POSITIONS = [
-  { id: 'bottom-right', labelAr: 'أسفل اليمين (فوق شريط المهام)', labelEn: 'Bottom Right (Taskbar Dock)' },
+  { id: 'bottom-right', labelAr: 'أسفل اليمين (فوق شريط المهام)', labelEn: 'Bottom Right (Above Taskbar)' },
   { id: 'bottom-center', labelAr: 'منتصف الشاشة بالأسفل', labelEn: 'Bottom Center' },
   { id: 'bottom-left', labelAr: 'أسفل اليسار', labelEn: 'Bottom Left' },
   { id: 'top-right', labelAr: 'أعلى اليمين', labelEn: 'Top Right' },
@@ -114,7 +114,27 @@ export const WidgetSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   };
 
+  const [dockError, setDockError] = useState<string | null>(null);
+
+  // Docking reads the live taskbar geometry, so unlike the corner presets it can fail:
+  // there may be no taskbar to dock to, or it may be vertical.
+  const handleDockToTaskbar = async () => {
+    setDockError(null);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_widget_preset', { preset: 'taskbar' });
+      setConfig((prev) => ({ ...prev, preset: 'taskbar', locked: true }));
+    } catch (e) {
+      setDockError(
+        isRtl
+          ? 'تعذر الإرساء: لم يُعثر على شريط مهام أفقي. الإرساء مدعوم فقط عندما يكون الشريط في الأسفل أو الأعلى.'
+          : 'Could not dock: no horizontal taskbar found. Docking works only with a bottom or top taskbar.'
+      );
+    }
+  };
+
   const handlePresetChange = async (presetId: string) => {
+    setDockError(null);
     setConfig((prev) => ({ ...prev, preset: presetId }));
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -167,6 +187,37 @@ export const WidgetSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
               <Compass className="w-4 h-4 text-cyan-600 dark:text-brand-cyan" />
               <span>{isRtl ? 'حالة التموضع والتحريك:' : 'Positioning Mode:'}</span>
             </label>
+
+            {/* Dock into the taskbar, beside the hidden-icons chevron */}
+            <button
+              type="button"
+              onClick={handleDockToTaskbar}
+              className={`w-full flex items-center gap-2.5 p-3 rounded-xl border text-xs font-semibold transition ${
+                config.preset === 'taskbar'
+                  ? 'bg-emerald-500/15 border-transparent dark:border-emerald-500/50 text-emerald-800 dark:text-emerald-300 shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-950/60 border-transparent dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200/80 dark:hover:bg-slate-800/40'
+              }`}
+            >
+              <PanelBottom className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div className="text-start">
+                <span className="block">
+                  {isRtl ? 'تثبيت داخل شريط المهام' : 'Pin Inside Taskbar'}
+                  {config.preset === 'taskbar' && (isRtl ? ' \u2014 مُفعَّل' : ' \u2014 active')}
+                </span>
+                <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400 block">
+                  {isRtl
+                    ? 'بجانب سهم الأيقونات المخفية، ويتبع الشريط تلقائياً'
+                    : 'Beside the hidden-icons arrow, follows the taskbar automatically'}
+                </span>
+              </div>
+            </button>
+
+            {dockError && (
+              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-transparent dark:border-amber-500/30">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-px" />
+                <span className="text-[11px] text-amber-800 dark:text-amber-300">{dockError}</span>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2.5">
               <button

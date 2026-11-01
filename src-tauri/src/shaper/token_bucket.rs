@@ -5,6 +5,8 @@ use dashmap::DashMap;
 use parking_lot::RwLock;
 use log::{debug, info, warn};
 
+use crate::net::vpn_detect::is_vpn_process_path;
+
 pub enum ShaperDecision {
     Pass,
     Drop,
@@ -121,6 +123,28 @@ impl TokenBucketShaper {
         }
     }
 
+    /// True when a rate limit exists. Shaping has no equivalent outside the packet path, so
+    /// this always forces the engine to intercept.
+    pub fn has_rate_limits(&self) -> bool {
+        !self.process_down_buckets.is_empty()
+            || !self.process_up_buckets.is_empty()
+            || !self.stream_down_buckets.is_empty()
+            || !self.stream_up_buckets.is_empty()
+    }
+
+    /// True when a single connection is blocked. A stream is a live 5-tuple with an
+    /// ephemeral port, not an executable, so WFP's app-id filters cannot express it and it
+    /// still has to be dropped on the packet path.
+    pub fn has_blocked_streams(&self) -> bool {
+        !self.blocked_streams.is_empty()
+    }
+
+    /// True when a whole application is blocked. Only forces interception where WFP
+    /// blocking is unavailable; see `PacketEngine::desired_mode`.
+    pub fn has_blocked_paths(&self) -> bool {
+        !self.blocked_paths.is_empty()
+    }
+
     /// Set process throttling and blocking rules
     pub fn update_process_rule(
         &self,
@@ -129,6 +153,19 @@ impl TokenBucketShaper {
         down_limit_kbps: Option<u64>,
         up_limit_kbps: Option<u64>,
     ) {
+        // A limit on a VPN client throttles the entire machine, because every other app's
+        // traffic is carried inside that one tunnel. Store nothing and enforce nothing.
+        if is_vpn_process_path(path) {
+            warn!(
+                "[Shaper] Refusing rule on VPN client {} - limiting the tunnel would throttle the whole machine",
+                path
+            );
+            self.blocked_paths.remove(path);
+            self.process_down_buckets.remove(path);
+            self.process_up_buckets.remove(path);
+            return;
+        }
+
         if is_blocked {
             if is_critical_system_process(path) {
                 info!("[Shaper] Blocking critical system process {} - DNS/DHCP/NTP ports will be auto-whitelisted", path);
@@ -231,6 +268,14 @@ impl TokenBucketShaper {
         local_port: u16,
         remote_port: u16,
     ) -> ShaperDecision {
+        // 0. Tunnel traffic is never shaped. Delaying or dropping the encrypted outer flow
+        //    breaks the tunnel for every application riding inside it.
+        if let Some(path) = exe_path {
+            if is_vpn_process_path(path) {
+                return ShaperDecision::Pass;
+            }
+        }
+
         // 1. Check if entity is blocked
         if let Some(path) = exe_path {
             if self.blocked_paths.contains_key(path) {

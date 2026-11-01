@@ -16,6 +16,7 @@ export const ar = {
   
   // شريط الحالة
   status_kernel_active: "محرك تشكيل النواة نشط (Kernel Shaper)",
+  status_kernel_monitor: "مراقبة النواة - وضع آمن (بلا اعتراض)",
   status_passive_monitor: "وضع المراقبة اللحظية للمنافذ",
   status_admin_req: "يتطلب صلاحيات المسؤول لتفعيل تشكيل النواة المباشر",
   status_elevate_btn: "تشغيل كمسؤول (Elevate)",

@@ -16,6 +16,7 @@ export const en = {
   
   // Status Bar
   status_kernel_active: "Kernel Shaper Active",
+  status_kernel_monitor: "Kernel Monitor - Safe Mode",
   status_passive_monitor: "Passive Socket Monitor",
   status_admin_req: "Administrator Required for Kernel Shaping",
   status_elevate_btn: "Elevate to Admin",

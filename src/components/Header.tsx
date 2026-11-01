@@ -51,7 +51,13 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAbout, onOpenWidgetSetting
 
   const [showAvModal, setShowAvModal] = useState(false);
 
-  const isKernelActive = driverStatus.mode === 'kernel_shaper' && driverStatus.is_driver_loaded;
+  // The driver runs in two healthy modes: sniffing only (no rules set, nothing is
+  // intercepted) and shaping (a block or limit exists). Only a failure to load the
+  // driver at all is worth an amber badge and an elevate prompt.
+  const isShaping = driverStatus.mode === 'kernel_shaper' && driverStatus.is_driver_loaded;
+  const isKernelActive =
+    driverStatus.is_driver_loaded &&
+    (driverStatus.mode === 'kernel_shaper' || driverStatus.mode === 'kernel_monitor');
 
   return (
     <header className="bg-white dark:bg-[#0C1220] border-b border-transparent dark:border-slate-800/80 px-6 py-3.5 shadow-sm dark:shadow-none select-none transition-colors">
@@ -79,16 +85,28 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAbout, onOpenWidgetSetting
           {/* Driver Status Badge */}
           <div
             className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
-              isKernelActive
+              !isKernelActive
+                ? 'bg-amber-50 text-amber-700 border-transparent dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-500/30'
+                : isShaping
                 ? 'bg-emerald-50 text-emerald-700 border-transparent dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-500/30'
-                : 'bg-amber-50 text-amber-700 border-transparent dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-500/30'
+                : 'bg-sky-50 text-sky-700 border-transparent dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-500/30'
             }`}
           >
             {isKernelActive ? (
               <>
-                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                <span>{t.status_kernel_active}</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <ShieldCheck
+                  className={`w-4 h-4 ${
+                    isShaping
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-sky-600 dark:text-sky-400'
+                  }`}
+                />
+                <span>{isShaping ? t.status_kernel_active : t.status_kernel_monitor}</span>
+                <span
+                  className={`w-2 h-2 rounded-full animate-pulse ${
+                    isShaping ? 'bg-emerald-500' : 'bg-sky-500'
+                  }`}
+                />
               </>
             ) : (
               <>

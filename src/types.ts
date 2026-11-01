@@ -36,7 +36,7 @@ export interface ProcessTraffic {
 export interface DriverStatus {
   is_admin: boolean;
   is_driver_loaded: boolean;
-  mode: 'kernel_shaper' | 'passive_monitor' | string;
+  mode: 'kernel_shaper' | 'kernel_monitor' | 'passive_monitor' | string;
   packet_count: number;
   diverted_bytes: number;
   error_message?: string | null;

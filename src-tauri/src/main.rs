@@ -9,7 +9,7 @@ mod process;
 mod storage;
 mod alerts;
 
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -23,6 +23,8 @@ use log::{info, warn, error};
 
 use crate::models::{AppRule, DriverStatus, GlobalTelemetry, NewAppAlert, ProcessTraffic, StreamRule, StreamTraffic, WidgetConfig};
 use crate::driver::packet_engine::PacketEngine;
+use crate::net::wfp_block::WfpBlocker;
+use crate::process::taskbar;
 use crate::net::ip_helper::IpHelperResolver;
 use crate::process::win32_shell::{
     extract_icon_base64, get_process_name_from_path, get_process_path, is_running_as_admin,
@@ -39,6 +41,7 @@ pub struct AppState {
     pub db: Arc<Database>,
     pub detector: Arc<AppDetector>,
     pub packet_engine: Arc<PacketEngine>,
+    pub wfp: Arc<WfpBlocker>,
     pub driver_status: Arc<RwLock<DriverStatus>>,
     pub app_rules_cache: Arc<DashMap<String, AppRule>>,
     pub stream_rules_cache: Arc<DashMap<String, StreamRule>>,
@@ -60,6 +63,84 @@ fn get_telemetry_snapshot(state: State<AppState>) -> Vec<ProcessTraffic> {
     build_telemetry_tree(&state)
 }
 
+/// Enforce an application block through WFP.
+///
+/// On failure the blocker records the path as uncovered, so the following
+/// `sync_engine_mode` puts the engine back into interception and the shaper's
+/// packet-level block becomes the enforcement instead.
+fn apply_wfp_block(state: &AppState, path: &str, is_blocked: bool) {
+    if !state.wfp.is_active() {
+        return;
+    }
+
+    if let Err(e) = state.wfp.set_blocked(path, is_blocked) {
+        warn!("[WFP] Could not {} {}: {}", if is_blocked { "block" } else { "unblock" }, path, e);
+        // sync_engine_mode runs next and will fall back to intercepting if this block is
+        // now uncovered.
+        return;
+    }
+
+    // An ALE connect filter only refuses *new* connections. Tear down what the process
+    // already has open so the block takes effect now rather than at its next connect.
+    if is_blocked {
+        close_sockets_for_path(state, path);
+    }
+}
+
+/// Close every TCP connection currently owned by `path`.
+fn close_sockets_for_path(state: &AppState, path: &str) {
+    let target = path.to_lowercase();
+    let mut closed = 0usize;
+
+    for socket in state.ip_resolver.get_active_sockets() {
+        if socket.protocol != "TCP" || socket.pid <= 4 {
+            continue;
+        }
+        let owner = match get_process_path(socket.pid) {
+            Some(p) => p.to_lowercase(),
+            None => continue,
+        };
+        if owner != target {
+            continue;
+        }
+        // close_tcp_socket drives SetTcpEntry, which is IPv4-only.
+        let (IpAddr::V4(local), IpAddr::V4(remote)) = (socket.local_ip, socket.remote_ip) else {
+            continue;
+        };
+        if state
+            .ip_resolver
+            .close_tcp_socket(local, socket.local_port, remote, socket.remote_port)
+            .is_ok()
+        {
+            closed += 1;
+        }
+    }
+
+    if closed > 0 {
+        info!("[WFP] Closed {} existing connection(s) for {}", closed, path);
+    }
+}
+
+/// Re-open the packet engine for the current rule set and VPN state, then mirror the
+/// resulting mode into the status the UI reads.
+fn sync_engine_mode(state: &AppState) {
+    if let Err(e) = state.packet_engine.reconcile() {
+        warn!("Packet engine reconcile failed: {}", e);
+        let mut status = state.driver_status.write();
+        status.is_driver_loaded = false;
+        status.mode = "passive_monitor".to_string();
+        status.error_message = Some(e);
+        return;
+    }
+
+    if let Some(mode) = state.packet_engine.active_mode() {
+        let mut status = state.driver_status.write();
+        status.is_driver_loaded = true;
+        status.mode = mode.label().to_string();
+        status.error_message = None;
+    }
+}
+
 #[tauri::command]
 fn set_process_rule(state: State<AppState>, rule: AppRule) -> Result<(), String> {
     // 1. Update shaper engine
@@ -75,6 +156,14 @@ fn set_process_rule(state: State<AppState>, rule: AppRule) -> Result<(), String>
 
     // 3. Persist to SQLite
     state.db.set_app_rule(&rule)?;
+
+    // 4. Enforce the block in the kernel. Must happen before the reconcile below, which
+    //    reads whether WFP is carrying the block when it picks sniff vs intercept.
+    apply_wfp_block(&state, &rule.path, rule.is_blocked);
+
+    // 5. A rule may be the first one needing interception, or the last one removed.
+    //    Re-open the driver in the right mode.
+    sync_engine_mode(&state);
     Ok(())
 }
 
@@ -93,6 +182,9 @@ fn set_stream_rule(state: State<AppState>, rule: StreamRule) -> Result<(), Strin
 
     // 3. Persist to SQLite
     state.db.set_stream_rule(&rule)?;
+
+    // 4. See set_process_rule.
+    sync_engine_mode(&state);
     Ok(())
 }
 
@@ -317,7 +409,48 @@ fn get_taskbar_widget(state: State<AppState>) -> bool {
     state.db.get_setting("taskbar_widget", "true") == "true"
 }
 
+/// Physical size of the widget window on the monitor it currently sits on.
+fn widget_physical_size(widget: &tauri::WebviewWindow) -> (i32, i32) {
+    widget
+        .outer_size()
+        .map(|s| (s.width as i32, s.height as i32))
+        .unwrap_or((220, 38))
+}
+
+/// Place the widget inside the taskbar, immediately left of the notification area.
+///
+/// Returns false when the shell offers nothing to dock to (no taskbar, auto-hide
+/// retracted, vertical taskbar); the caller then leaves the widget untouched.
+fn dock_widget_to_taskbar(widget: &tauri::WebviewWindow) -> bool {
+    let (w, h) = widget_physical_size(widget);
+    let Some((x, y)) = taskbar::dock_position(w, h) else {
+        return false;
+    };
+
+    // The taskbar is itself topmost, and within that band the most recently raised window
+    // wins. Re-assert on every move or the widget slides behind it.
+    if widget
+        .outer_position()
+        .map(|p| p.x != x || p.y != y)
+        .unwrap_or(true)
+    {
+        let _ = widget.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
+    }
+    let _ = widget.set_always_on_top(true);
+    true
+}
+
+fn widget_preset(db: &Database) -> String {
+    db.get_setting("widget_preset", "bottom-right")
+}
+
 fn position_widget_window(widget: &tauri::WebviewWindow, db: &Database) {
+    // Taskbar docking derives its position from the live shell geometry, so the saved
+    // x/y below must not override it.
+    if widget_preset(db) == "taskbar" && dock_widget_to_taskbar(widget) {
+        return;
+    }
+
     if let Ok(Some(monitor)) = widget.primary_monitor() {
         let screen_size = monitor.size();
         let scale = monitor.scale_factor();
@@ -356,6 +489,12 @@ fn position_widget_window(widget: &tauri::WebviewWindow, db: &Database) {
 
 #[tauri::command]
 fn save_widget_position(state: State<AppState>, x: i32, y: i32) -> Result<(), String> {
+    // A docked widget is positioned by the shell geometry every tick; persisting a drag
+    // would only produce a coordinate that is immediately overwritten.
+    if widget_preset(&state.db) == "taskbar" {
+        return Ok(());
+    }
+
     // Strict safety guard: reject negative coordinates (like -32000 on lock/sleep) or absurd numbers
     if x >= 0 && y >= 0 && x < 15000 && y < 15000 {
         state.db.set_setting("widget_x", &x.to_string())?;
@@ -420,6 +559,14 @@ fn set_widget_preset(app: AppHandle, state: State<AppState>, preset: String) -> 
             let widget_h = (38.0 * scale) as i32;
             let taskbar_h = (48.0 * scale) as i32;
             let margin = (16.0 * scale) as i32;
+
+            if preset == "taskbar" {
+                state.db.set_setting("widget_preset", &preset)?;
+                if !dock_widget_to_taskbar(&widget) {
+                    return Err("No horizontal taskbar found to dock to".to_string());
+                }
+                return Ok(());
+            }
 
             let (px, py) = match preset.as_str() {
                 "top-left" => (margin, margin),
@@ -774,6 +921,10 @@ fn main() {
         }
     };
 
+    // Blocking is enforced by the kernel where possible; the shaper keeps its own copy of
+    // the block as the fallback for when WFP could not be opened.
+    let wfp = Arc::new(WfpBlocker::new());
+
     // Load existing persistent rules into Token Bucket Shaper and fast In-Memory Caches
     let app_rules_cache = Arc::new(DashMap::new());
     for rule in db.get_all_app_rules() {
@@ -783,6 +934,11 @@ fn main() {
             rule.down_limit_kbps,
             rule.up_limit_kbps,
         );
+        if rule.is_blocked {
+            if let Err(e) = wfp.set_blocked(&rule.path, true) {
+                warn!("[WFP] Could not restore block for {}: {}", rule.path, e);
+            }
+        }
         app_rules_cache.insert(rule.path.clone(), rule);
     }
 
@@ -808,6 +964,7 @@ fn main() {
     let packet_engine = Arc::new(PacketEngine::new(
         ip_resolver.clone(),
         shaper.clone(),
+        wfp.clone(),
         db.clone(),
         detector.clone(),
     ));
@@ -820,9 +977,16 @@ fn main() {
     if is_admin {
         match packet_engine.start() {
             Ok(_) => {
-                info!("Kernel driver WinDivert started successfully!");
                 driver_loaded = true;
-                mode = "kernel_shaper".to_string();
+                mode = packet_engine
+                    .active_mode()
+                    .map(|m| m.label().to_string())
+                    .unwrap_or_else(|| "kernel_monitor".to_string());
+                info!(
+                    "Kernel driver WinDivert started in {} mode, filter: {}",
+                    mode,
+                    packet_engine.active_filter()
+                );
             }
             Err(e) => {
                 warn!("Could not start WinDivert driver: {}. Falling back to passive monitor.", e);
@@ -850,6 +1014,7 @@ fn main() {
         db: db.clone(),
         detector: detector.clone(),
         packet_engine: packet_engine.clone(),
+        wfp: wfp.clone(),
         driver_status: driver_status.clone(),
         app_rules_cache: app_rules_cache.clone(),
         stream_rules_cache: stream_rules_cache.clone(),
@@ -863,6 +1028,27 @@ fn main() {
         std::thread::spawn(move || loop {
             ip_resolver.refresh();
             std::thread::sleep(Duration::from_millis(500));
+        });
+    }
+
+    // Re-derive the WinDivert filter every 5s. A VPN that connects or disconnects while the
+    // app runs changes the server endpoints we must keep our hands off.
+    if driver_loaded {
+        let engine = packet_engine.clone();
+        let status = driver_status.clone();
+        std::thread::spawn(move || loop {
+            std::thread::sleep(Duration::from_secs(5));
+            match engine.reconcile() {
+                Ok(()) => {
+                    if let Some(m) = engine.active_mode() {
+                        let mut st = status.write();
+                        if st.mode != m.label() {
+                            st.mode = m.label().to_string();
+                        }
+                    }
+                }
+                Err(e) => warn!("Periodic packet engine reconcile failed: {}", e),
+            }
         });
     }
 
@@ -897,6 +1083,29 @@ fn main() {
                             let _ = w.unminimize();
                             let _ = w.set_always_on_top(true);
                         }
+                    }
+                });
+            }
+
+            // Keep a docked widget glued to the taskbar. The anchor moves whenever a tray
+            // icon appears or hides, the taskbar auto-hides, the resolution or DPI changes,
+            // or Explorer restarts and rebuilds its windows - none of which raise an event
+            // we can subscribe to, so re-derive the position on a tick. dock_widget_to_taskbar
+            // skips the move when the position is already correct, so a steady desktop costs
+            // one GetWindowRect pair per second.
+            {
+                let handle_for_dock = handle.clone();
+                let db_for_dock = db_ref.clone();
+                std::thread::spawn(move || loop {
+                    std::thread::sleep(Duration::from_millis(1000));
+                    if db_for_dock.get_setting("widget_preset", "bottom-right") != "taskbar" {
+                        continue;
+                    }
+                    if db_for_dock.get_setting("taskbar_widget", "true") != "true" {
+                        continue;
+                    }
+                    if let Some(w) = handle_for_dock.get_webview_window("widget") {
+                        dock_widget_to_taskbar(&w);
                     }
                 });
             }

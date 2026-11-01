@@ -3,12 +3,14 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use dashmap::DashMap;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use log::{info, warn, debug};
 
 use crate::driver::windivert_ffi::*;
 use crate::driver::sni::{extract_sni_from_payload, lookup_domain, record_domain_for_ip};
 use crate::net::ip_helper::IpHelperResolver;
+use crate::net::vpn_detect::detect_vpn_endpoints;
+use crate::net::wfp_block::WfpBlocker;
 use crate::process::win32_shell::{get_process_name_from_path, get_process_path};
 use crate::shaper::token_bucket::{ShaperDecision, TokenBucketShaper};
 use crate::storage::db::Database;
@@ -20,6 +22,51 @@ fn current_epoch_ms() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+/// How the engine touches the network stack.
+///
+/// `Sniff` opens WinDivert with SNIFF|RECV_ONLY: the driver hands us a *copy* of each packet
+/// and leaves the original in the stack. Nothing is removed, re-routed or re-injected, so a
+/// VPN tunnel cannot be disturbed. `Intercept` is the classic divert mode and is only needed
+/// once the user has an actual block or rate limit in place.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EngineMode {
+    Sniff,
+    Intercept,
+}
+
+impl EngineMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            EngineMode::Sniff => "kernel_monitor",
+            EngineMode::Intercept => "kernel_shaper",
+        }
+    }
+}
+
+/// Build the WinDivert filter, excluding every VPN server endpoint.
+///
+/// The exclusion is written as `not (a or b or ...)` on purpose. A direct `ip.SrcAddr != X`
+/// evaluates to *false* for an IPv6 packet because the field does not apply to it, which
+/// would silently drop all IPv6 out of the filter. Negating a disjunction keeps
+/// non-applicable fields harmless.
+fn build_filter(vpn_endpoints: &[IpAddr]) -> String {
+    let mut filter = String::from("!loopback and (tcp or udp)");
+
+    if !vpn_endpoints.is_empty() {
+        let mut terms: Vec<String> = Vec::with_capacity(vpn_endpoints.len() * 2);
+        for ip in vpn_endpoints {
+            let field = if ip.is_ipv6() { "ipv6" } else { "ip" };
+            terms.push(format!("{}.SrcAddr == {}", field, ip));
+            terms.push(format!("{}.DstAddr == {}", field, ip));
+        }
+        filter.push_str(" and not (");
+        filter.push_str(&terms.join(" or "));
+        filter.push(')');
+    }
+
+    filter
 }
 
 struct DelayedPacket {
@@ -63,6 +110,14 @@ pub struct ProcessStats {
 pub struct PacketEngine {
     divert_lib: Option<WinDivertLib>,
     handle: Arc<RwLock<Option<SafeWinDivertHandle>>>,
+    /// Bumped on every (re)start so worker threads from a previous generation exit instead
+    /// of racing the new ones for the same handle.
+    generation: Arc<AtomicU64>,
+    active_mode: Arc<RwLock<Option<EngineMode>>>,
+    active_filter: Arc<RwLock<String>>,
+    /// Serialises stop+start so a rule change and the periodic VPN re-check cannot both
+    /// open a handle and leak one of them.
+    reconcile_lock: Arc<Mutex<()>>,
     pub is_running: Arc<AtomicBool>,
     pub packet_counter: Arc<AtomicU64>,
     pub byte_counter: Arc<AtomicU64>,
@@ -76,6 +131,7 @@ pub struct PacketEngine {
     pub processes: Arc<DashMap<u32, Arc<ProcessStats>>>,
     ip_resolver: Arc<IpHelperResolver>,
     shaper: Arc<TokenBucketShaper>,
+    wfp: Arc<WfpBlocker>,
     db: Arc<Database>,
     detector: Arc<AppDetector>,
 }
@@ -84,6 +140,7 @@ impl PacketEngine {
     pub fn new(
         ip_resolver: Arc<IpHelperResolver>,
         shaper: Arc<TokenBucketShaper>,
+        wfp: Arc<WfpBlocker>,
         db: Arc<Database>,
         detector: Arc<AppDetector>,
     ) -> Self {
@@ -98,6 +155,10 @@ impl PacketEngine {
         Self {
             divert_lib,
             handle: Arc::new(RwLock::new(None)),
+            generation: Arc::new(AtomicU64::new(0)),
+            active_mode: Arc::new(RwLock::new(None)),
+            active_filter: Arc::new(RwLock::new(String::new())),
+            reconcile_lock: Arc::new(Mutex::new(())),
             is_running: Arc::new(AtomicBool::new(false)),
             packet_counter: Arc::new(AtomicU64::new(0)),
             byte_counter: Arc::new(AtomicU64::new(0)),
@@ -111,31 +172,119 @@ impl PacketEngine {
             processes: Arc::new(DashMap::new()),
             ip_resolver,
             shaper,
+            wfp,
             db,
             detector,
         }
     }
 
-    /// Start the optimized WinDivert loop with CPU spike protection
+    /// Open the engine in whichever mode the current rule set calls for.
     pub fn start(&self) -> Result<(), String> {
+        let _guard = self.reconcile_lock.lock();
+        let mode = self.desired_mode();
+        let filter = build_filter(&detect_vpn_endpoints(&self.ip_resolver));
+        self.start_with(mode, filter)
+    }
+
+    /// Interception is the expensive, VPN-hostile path, so it is entered only for what
+    /// genuinely needs it: a rate limit, or a blocked single connection. A blocked
+    /// *application* is enforced by WFP in the kernel and costs the packet path nothing —
+    /// unless WFP could not be opened, in which case dropping packets is the only way left
+    /// to honour the block.
+    fn desired_mode(&self) -> EngineMode {
+        let wfp_carries_blocks = self.wfp.is_active() && !self.wfp.has_uncovered_blocks();
+        let must_intercept = self.shaper.has_rate_limits()
+            || self.shaper.has_blocked_streams()
+            || (!wfp_carries_blocks && self.shaper.has_blocked_paths());
+
+        if must_intercept {
+            EngineMode::Intercept
+        } else {
+            EngineMode::Sniff
+        }
+    }
+
+    pub fn active_mode(&self) -> Option<EngineMode> {
+        *self.active_mode.read()
+    }
+
+    pub fn active_filter(&self) -> String {
+        self.active_filter.read().clone()
+    }
+
+    /// Re-open the engine when the required mode or the VPN endpoint set has changed.
+    ///
+    /// Called after every rule change and periodically, so that connecting or disconnecting
+    /// a VPN while the app runs re-derives the filter. A no-op when nothing moved.
+    pub fn reconcile(&self) -> Result<(), String> {
+        let _guard = self.reconcile_lock.lock();
+        if self.divert_lib.is_none() {
+            return Ok(());
+        }
+
+        let desired_mode = self.desired_mode();
+        let desired_filter = build_filter(&detect_vpn_endpoints(&self.ip_resolver));
+
+        let unchanged = *self.active_mode.read() == Some(desired_mode)
+            && *self.active_filter.read() == desired_filter
+            && self.handle.read().is_some();
+        if unchanged {
+            return Ok(());
+        }
+
+        info!(
+            "Reconciling packet engine -> mode={:?} filter={}",
+            desired_mode, desired_filter
+        );
+        self.stop();
+        self.start_with(desired_mode, desired_filter)
+    }
+
+    fn start_with(&self, mode: EngineMode, filter: String) -> Result<(), String> {
         let lib = match &self.divert_lib {
             Some(l) => l.clone(),
             None => return Err("WinDivert library not loaded".to_string()),
         };
 
-        // 1. Targeted filter: Exclude loopback to avoid CPU spikes on internal IPC!
-        let filter = "!loopback and (tcp or udp)";
-        let handle = lib.open(filter, WINDIVERT_LAYER_NETWORK, 0, 0)?;
+        // SNIFF|RECV_ONLY hands us copies and leaves the originals in the stack: no
+        // re-injection, no fresh route lookup, nothing a VPN tunnel can trip over.
+        let open_flags = match mode {
+            EngineMode::Sniff => WINDIVERT_FLAG_SNIFF | WINDIVERT_FLAG_RECV_ONLY,
+            EngineMode::Intercept => 0,
+        };
 
-        // 2. Set queue length and time to prevent packet drops under heavy 100+ Mbps traffic
+        // Losing all monitoring because one endpoint produced a filter WinDivert dislikes
+        // would be a worse outcome than losing the VPN exclusion. Fall back to the base
+        // filter, which is only ever reached in sniff mode where exclusion is cosmetic.
+        let (handle, filter) = match lib.open(&filter, WINDIVERT_LAYER_NETWORK, 0, open_flags) {
+            Ok(h) => (h, filter),
+            Err(e) => {
+                let base = build_filter(&[]);
+                if filter == base {
+                    return Err(e);
+                }
+                warn!(
+                    "WinDivert rejected filter '{}' ({}), falling back to '{}'",
+                    filter, e, base
+                );
+                let h = lib.open(&base, WINDIVERT_LAYER_NETWORK, 0, open_flags)?;
+                (h, base)
+            }
+        };
+
+        // Queue length and time prevent packet drops under heavy 100+ Mbps traffic
         lib.set_param(handle, WINDIVERT_PARAM_QUEUE_LENGTH, 16384);
         lib.set_param(handle, WINDIVERT_PARAM_QUEUE_TIME, 2000); // 2000 ms queue buffer
         lib.set_param(handle, WINDIVERT_PARAM_QUEUE_SIZE, 32 * 1024 * 1024); // 32 MB buffer
 
         *self.handle.write() = Some(handle);
+        *self.active_mode.write() = Some(mode);
+        *self.active_filter.write() = filter.clone();
         self.is_running.store(true, Ordering::SeqCst);
+        let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
 
         let is_running = self.is_running.clone();
+        let gen_counter = self.generation.clone();
         let packet_counter = self.packet_counter.clone();
         let byte_counter = self.byte_counter.clone();
         let global_down_bytes_window = self.global_down_bytes_window.clone();
@@ -150,41 +299,56 @@ impl PacketEngine {
         // Share the handle via Arc so stop() invalidation is seen by all threads immediately
         let handle_arc = self.handle.clone();
 
-        let (delay_tx, delay_rx) = std::sync::mpsc::sync_channel::<DelayedPacket>(16384);
-        let delay_lib = lib.clone();
-        let is_running_delay = self.is_running.clone();
-        let delay_handle_arc = self.handle.clone();
+        let intercepting = mode == EngineMode::Intercept;
 
-        // Dedicated background worker for delayed (throttled) packets so recv loop NEVER blocks!
-        std::thread::spawn(move || {
-            while is_running_delay.load(Ordering::Relaxed) {
-                match delay_rx.recv_timeout(Duration::from_millis(10)) {
-                    Ok(pkt) => {
-                        // Read handle from Arc so we see stop() invalidation immediately
-                        let h = match *delay_handle_arc.read() {
-                            Some(h) => h,
-                            None => continue, // Handle closed by stop(), skip this packet
-                        };
-                        let now = Instant::now();
-                        if pkt.send_at > now {
-                            std::thread::sleep(pkt.send_at - now);
+        // The delayed-packet worker only exists when we actually re-inject.
+        let delay_tx = if intercepting {
+            let (delay_tx, delay_rx) = std::sync::mpsc::sync_channel::<DelayedPacket>(16384);
+            let delay_lib = lib.clone();
+            let is_running_delay = self.is_running.clone();
+            let delay_gen = self.generation.clone();
+            let delay_handle_arc = self.handle.clone();
+
+            std::thread::spawn(move || {
+                while is_running_delay.load(Ordering::Relaxed)
+                    && delay_gen.load(Ordering::Relaxed) == generation
+                {
+                    match delay_rx.recv_timeout(Duration::from_millis(10)) {
+                        Ok(pkt) => {
+                            // Read handle from Arc so we see stop() invalidation immediately
+                            let h = match *delay_handle_arc.read() {
+                                Some(h) => h,
+                                None => continue, // Handle closed by stop(), skip this packet
+                            };
+                            let now = Instant::now();
+                            if pkt.send_at > now {
+                                std::thread::sleep(pkt.send_at - now);
+                            }
+                            let _ = delay_lib.send(h, &pkt.data, &pkt.addr);
                         }
-                        let _ = delay_lib.send(h, &pkt.data, &pkt.addr);
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
                     }
-                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
-                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
                 }
-            }
-        });
+            });
+            Some(delay_tx)
+        } else {
+            None
+        };
 
         // Dedicated packet processing loop
         std::thread::spawn(move || {
-            info!("WinDivert packet loop started with targeted filter: {}", filter);
+            info!(
+                "WinDivert packet loop started in {:?} mode with filter: {}",
+                mode, filter
+            );
 
             let mut packet_buf = vec![0u8; 65535];
             let mut addr = WinDivertAddress::new();
 
-            while is_running.load(Ordering::Relaxed) {
+            while is_running.load(Ordering::Relaxed)
+                && gen_counter.load(Ordering::Relaxed) == generation
+            {
                 // Read handle from Arc so we see stop() invalidation immediately
                 let current_handle = match *handle_arc.read() {
                     Some(h) => h,
@@ -257,6 +421,13 @@ impl PacketEngine {
                                 packet_len as u64,
                             );
 
+                            // Sniff mode never owns the packet: the original is still in the
+                            // stack, so there is nothing to re-inject and nothing to shape.
+                            let delay_tx = match delay_tx.as_ref() {
+                                Some(tx) => tx,
+                                None => continue,
+                            };
+
                             // Token Bucket evaluation (with port-aware critical system protection)
                             let decision = shaper.evaluate_packet_with_ports(
                                 exe_path.as_deref(),
@@ -292,14 +463,16 @@ impl PacketEngine {
                                     }
                                 }
                             }
-                        } else {
+                        } else if intercepting {
                             if let Err(e) = lib.send(current_handle, packet_slice, &addr) {
                                 warn!("WinDivert send (passthrough) error: {}", e);
                             }
                         }
                     }
                     Err(e) => {
-                        if is_running.load(Ordering::Relaxed) {
+                        if is_running.load(Ordering::Relaxed)
+                            && gen_counter.load(Ordering::Relaxed) == generation
+                        {
                             warn!("WinDivert recv error: {}", e);
                             std::thread::sleep(Duration::from_millis(1));
                         }
@@ -316,6 +489,8 @@ impl PacketEngine {
 
     pub fn stop(&self) {
         self.is_running.store(false, Ordering::SeqCst);
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        *self.active_mode.write() = None;
         if let Some(h) = self.handle.write().take() {
             if let Some(lib) = &self.divert_lib {
                 lib.close(h);
@@ -653,5 +828,46 @@ fn record_packet_metrics(
     } else {
         proc_stats.down_bytes_last_window.fetch_add(bytes, Ordering::Relaxed);
         proc_stats.total_down_bytes.fetch_add(bytes, Ordering::Relaxed);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_filter;
+    use std::net::IpAddr;
+
+    #[test]
+    fn base_filter_when_no_vpn() {
+        assert_eq!(build_filter(&[]), "!loopback and (tcp or udp)");
+    }
+
+    #[test]
+    fn excludes_ipv4_endpoint_in_both_directions() {
+        let ip: IpAddr = "185.159.157.1".parse().unwrap();
+        assert_eq!(
+            build_filter(&[ip]),
+            "!loopback and (tcp or udp) and not (ip.SrcAddr == 185.159.157.1 or ip.DstAddr == 185.159.157.1)"
+        );
+    }
+
+    #[test]
+    fn uses_ipv6_field_for_ipv6_endpoint() {
+        let ip: IpAddr = "2a07:b944::1".parse().unwrap();
+        let f = build_filter(&[ip]);
+        assert!(f.contains("ipv6.SrcAddr == 2a07:b944::1"), "{}", f);
+        assert!(f.contains("ipv6.DstAddr == 2a07:b944::1"), "{}", f);
+        assert!(!f.contains("ip.SrcAddr"), "{}", f);
+    }
+
+    #[test]
+    fn multiple_endpoints_are_all_excluded() {
+        let a: IpAddr = "10.0.0.1".parse().unwrap();
+        let b: IpAddr = "10.0.0.2".parse().unwrap();
+        assert_eq!(
+            build_filter(&[a, b]),
+            "!loopback and (tcp or udp) and not (\
+ip.SrcAddr == 10.0.0.1 or ip.DstAddr == 10.0.0.1 or \
+ip.SrcAddr == 10.0.0.2 or ip.DstAddr == 10.0.0.2)"
+        );
     }
 }
