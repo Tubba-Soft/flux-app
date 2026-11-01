@@ -908,7 +908,19 @@ fn main() {
     };
     std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", combined_wv2_args);
 
-    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    // A windowed app has no stderr, so env_logger's default target silently discarded
+    // every diagnostic. Send them to the same file the event trace already uses.
+    {
+        let mut builder =
+            env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
+        match std::fs::OpenOptions::new().create(true).append(true).open(&temp_log_path) {
+            Ok(f) => {
+                builder.target(env_logger::Target::Pipe(Box::new(f)));
+            }
+            Err(e) => eprintln!("Could not open {:?} for logging: {}", temp_log_path, e),
+        }
+        builder.init();
+    }
 
     let ip_resolver = Arc::new(IpHelperResolver::new());
     let shaper = Arc::new(TokenBucketShaper::new());
@@ -934,6 +946,12 @@ fn main() {
             rule.down_limit_kbps,
             rule.up_limit_kbps,
         );
+        if rule.is_blocked || rule.down_limit_kbps.is_some() || rule.up_limit_kbps.is_some() {
+            info!(
+                "[Rules] Active rule restored: {} (blocked={}, down={:?} kbps, up={:?} kbps)",
+                rule.path, rule.is_blocked, rule.down_limit_kbps, rule.up_limit_kbps
+            );
+        }
         if rule.is_blocked {
             if let Err(e) = wfp.set_blocked(&rule.path, true) {
                 warn!("[WFP] Could not restore block for {}: {}", rule.path, e);

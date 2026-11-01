@@ -123,6 +123,40 @@ impl TokenBucketShaper {
         }
     }
 
+    /// Every executable carrying a rate limit. The engine turns these into the set of
+    /// ports it has to divert, so that one limited application never drags the rest of the
+    /// machine's traffic onto the interception path.
+    pub fn rate_limited_paths(&self) -> Vec<String> {
+        let mut paths: Vec<String> = self
+            .process_down_buckets
+            .iter()
+            .map(|e| e.key().clone())
+            .chain(self.process_up_buckets.iter().map(|e| e.key().clone()))
+            .collect();
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
+    /// Every executable blocked at the packet level.
+    pub fn blocked_path_list(&self) -> Vec<String> {
+        self.blocked_paths.iter().map(|e| e.key().clone()).collect()
+    }
+
+    /// Every individually blocked connection, plus any rate-limited stream.
+    pub fn ruled_stream_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self
+            .blocked_streams
+            .iter()
+            .map(|e| e.key().clone())
+            .chain(self.stream_down_buckets.iter().map(|e| e.key().clone()))
+            .chain(self.stream_up_buckets.iter().map(|e| e.key().clone()))
+            .collect();
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+
     /// True when a rate limit exists. Shaping has no equivalent outside the packet path, so
     /// this always forces the engine to intercept.
     pub fn has_rate_limits(&self) -> bool {
