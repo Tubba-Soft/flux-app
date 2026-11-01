@@ -190,10 +190,15 @@ impl TokenBucketShaper {
         // A limit on a VPN client throttles the entire machine, because every other app's
         // traffic is carried inside that one tunnel. Store nothing and enforce nothing.
         if is_vpn_process_path(path) {
-            warn!(
-                "[Shaper] Refusing rule on VPN client {} - limiting the tunnel would throttle the whole machine",
-                path
-            );
+            // Startup replays every known application through here, so warning
+            // unconditionally would report a refusal for each VPN client installed on the
+            // machine even when not one of them carries a rule.
+            if is_blocked || down_limit_kbps.is_some() || up_limit_kbps.is_some() {
+                warn!(
+                    "[Shaper] Refusing rule on VPN client {} - limiting the tunnel would throttle the whole machine",
+                    path
+                );
+            }
             self.blocked_paths.remove(path);
             self.process_down_buckets.remove(path);
             self.process_up_buckets.remove(path);

@@ -47,25 +47,43 @@ impl EngineMode {
 
 /// Build the WinDivert filter, excluding every VPN server endpoint.
 ///
-/// The exclusion is written as `not (a or b or ...)` on purpose. A direct `ip.SrcAddr != X`
-/// evaluates to *false* for an IPv6 packet because the field does not apply to it, which
-/// would silently drop all IPv6 out of the filter. Negating a disjunction keeps
-/// non-applicable fields harmless.
+/// Two constraints shape this, both verified against WinDivert's own filter compiler
+/// rather than assumed:
+///
+/// * `not (...)` over a parenthesised expression does not parse. WinDivert only negates a
+///   single test, as in `!loopback`, so the exclusion has to be a chain of `!=`.
+/// * A test on a field the packet does not carry evaluates to *false*, so a bare
+///   `ip.SrcAddr != X` would quietly exclude every IPv6 packet from the filter.
+///
+/// Hence the address family is selected first and the exclusions applied within it: each
+/// family keeps its own packets and only drops its own listed endpoints.
 fn build_filter(vpn_endpoints: &[IpAddr]) -> String {
     let mut filter = String::from("!loopback and (tcp or udp)");
-
-    if !vpn_endpoints.is_empty() {
-        let mut terms: Vec<String> = Vec::with_capacity(vpn_endpoints.len() * 2);
-        for ip in vpn_endpoints {
-            let field = if ip.is_ipv6() { "ipv6" } else { "ip" };
-            terms.push(format!("{}.SrcAddr == {}", field, ip));
-            terms.push(format!("{}.DstAddr == {}", field, ip));
-        }
-        filter.push_str(" and not (");
-        filter.push_str(&terms.join(" or "));
-        filter.push(')');
+    if vpn_endpoints.is_empty() {
+        return filter;
     }
 
+    fn clause(proto: &str, addrs: impl Iterator<Item = IpAddr>) -> String {
+        let terms: Vec<String> = addrs
+            .flat_map(|ip| {
+                [
+                    format!("{}.SrcAddr != {}", proto, ip),
+                    format!("{}.DstAddr != {}", proto, ip),
+                ]
+            })
+            .collect();
+        if terms.is_empty() {
+            // No endpoint of this family to exclude: admit all of its packets.
+            proto.to_string()
+        } else {
+            format!("({} and {})", proto, terms.join(" and "))
+        }
+    }
+
+    let v4 = clause("ip", vpn_endpoints.iter().copied().filter(IpAddr::is_ipv4));
+    let v6 = clause("ipv6", vpn_endpoints.iter().copied().filter(IpAddr::is_ipv6));
+
+    filter.push_str(&format!(" and ({} or {})", v4, v6));
     filter
 }
 
@@ -986,17 +1004,40 @@ mod tests {
         let ip: IpAddr = "185.159.157.1".parse().unwrap();
         assert_eq!(
             build_filter(&[ip]),
-            "!loopback and (tcp or udp) and not (ip.SrcAddr == 185.159.157.1 or ip.DstAddr == 185.159.157.1)"
+            "!loopback and (tcp or udp) and ((ip and \
+ip.SrcAddr != 185.159.157.1 and ip.DstAddr != 185.159.157.1) or ipv6)"
         );
+    }
+
+    #[test]
+    fn an_ipv4_exclusion_still_admits_ipv6() {
+        // The bug this guards: a bare `ip.SrcAddr != X` is false for an IPv6 packet, so
+        // without the family split every IPv6 packet would vanish from the filter.
+        let ip: IpAddr = "10.2.0.1".parse().unwrap();
+        let f = build_filter(&[ip]);
+        assert!(f.ends_with("or ipv6)"), "{}", f);
     }
 
     #[test]
     fn uses_ipv6_field_for_ipv6_endpoint() {
         let ip: IpAddr = "2a07:b944::1".parse().unwrap();
         let f = build_filter(&[ip]);
-        assert!(f.contains("ipv6.SrcAddr == 2a07:b944::1"), "{}", f);
-        assert!(f.contains("ipv6.DstAddr == 2a07:b944::1"), "{}", f);
-        assert!(!f.contains("ip.SrcAddr"), "{}", f);
+        assert!(f.contains("ipv6.SrcAddr != 2a07:b944::1"), "{}", f);
+        assert!(f.contains("ipv6.DstAddr != 2a07:b944::1"), "{}", f);
+        // IPv4 carries no exclusion here, so it must be admitted wholesale.
+        assert!(f.contains("(ip or "), "{}", f);
+    }
+
+    #[test]
+    fn negation_of_a_group_is_never_emitted() {
+        // WinDivert cannot parse `not (...)`; emitting one makes WinDivertOpen fail with
+        // ERROR_INVALID_PARAMETER and the engine silently loses the exclusion.
+        let a: IpAddr = "10.0.0.1".parse().unwrap();
+        let b: IpAddr = "2a07:b944::1".parse().unwrap();
+        for f in [build_filter(&[a]), build_filter(&[b]), build_filter(&[a, b])] {
+            assert!(!f.contains("not ("), "{}", f);
+            assert!(!f.contains("!("), "{}", f);
+        }
     }
 
     #[test]
@@ -1005,9 +1046,21 @@ mod tests {
         let b: IpAddr = "10.0.0.2".parse().unwrap();
         assert_eq!(
             build_filter(&[a, b]),
-            "!loopback and (tcp or udp) and not (\
-ip.SrcAddr == 10.0.0.1 or ip.DstAddr == 10.0.0.1 or \
-ip.SrcAddr == 10.0.0.2 or ip.DstAddr == 10.0.0.2)"
+            "!loopback and (tcp or udp) and ((ip and \
+ip.SrcAddr != 10.0.0.1 and ip.DstAddr != 10.0.0.1 and \
+ip.SrcAddr != 10.0.0.2 and ip.DstAddr != 10.0.0.2) or ipv6)"
+        );
+    }
+
+    #[test]
+    fn both_families_are_excluded_independently() {
+        let a: IpAddr = "10.0.0.1".parse().unwrap();
+        let b: IpAddr = "2a07:b944::1".parse().unwrap();
+        assert_eq!(
+            build_filter(&[a, b]),
+            "!loopback and (tcp or udp) and ((ip and \
+ip.SrcAddr != 10.0.0.1 and ip.DstAddr != 10.0.0.1) or (ipv6 and \
+ipv6.SrcAddr != 2a07:b944::1 and ipv6.DstAddr != 2a07:b944::1))"
         );
     }
 }
