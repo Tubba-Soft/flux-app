@@ -123,7 +123,8 @@ export const WidgetSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('set_widget_preset', { preset: 'taskbar' });
-      setConfig((prev) => ({ ...prev, preset: 'taskbar', locked: true }));
+      // Deliberately not `locked`: dragging the widget is how the user undocks it.
+      setConfig((prev) => ({ ...prev, preset: 'taskbar' }));
     } catch (e) {
       setDockError(
         isRtl

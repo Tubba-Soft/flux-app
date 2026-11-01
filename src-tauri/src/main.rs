@@ -42,6 +42,7 @@ pub struct AppState {
     pub detector: Arc<AppDetector>,
     pub packet_engine: Arc<PacketEngine>,
     pub wfp: Arc<WfpBlocker>,
+    pub dock_drag: Arc<DockDrag>,
     pub driver_status: Arc<RwLock<DriverStatus>>,
     pub app_rules_cache: Arc<DashMap<String, AppRule>>,
     pub stream_rules_cache: Arc<DashMap<String, StreamRule>>,
@@ -409,6 +410,57 @@ fn get_taskbar_widget(state: State<AppState>) -> bool {
     state.db.get_setting("taskbar_widget", "true") == "true"
 }
 
+/// Holds off the re-dock tick while the user has the widget in hand.
+///
+/// Without this the tick would yank a docked widget back to its anchor several times a
+/// second and it could not be dragged at all. The deadline is a safety net: a drag that
+/// never reports a drop - the pointer released outside the window, say - must not disable
+/// docking for the rest of the session.
+#[derive(Default)]
+pub struct DockDrag {
+    active: AtomicBool,
+    started_ms: std::sync::atomic::AtomicU64,
+}
+
+const DRAG_ABANDONED_AFTER_MS: u64 = 30_000;
+
+impl DockDrag {
+    fn begin(&self) {
+        self.started_ms.store(now_ms(), Ordering::Relaxed);
+        self.active.store(true, Ordering::Relaxed);
+    }
+
+    fn end(&self) {
+        self.active.store(false, Ordering::Relaxed);
+    }
+
+    /// True while a drag is genuinely in progress.
+    fn in_progress(&self) -> bool {
+        if !self.active.load(Ordering::Relaxed) {
+            return false;
+        }
+        if now_ms().saturating_sub(self.started_ms.load(Ordering::Relaxed))
+            > DRAG_ABANDONED_AFTER_MS
+        {
+            self.active.store(false, Ordering::Relaxed);
+            return false;
+        }
+        true
+    }
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+/// Horizontal offset the user dragged the docked widget to, if any.
+fn widget_dock_offset(db: &Database) -> Option<i32> {
+    db.get_setting("widget_dock_x", "").parse().ok()
+}
+
 /// Physical size of the widget window on the monitor it currently sits on.
 fn widget_physical_size(widget: &tauri::WebviewWindow) -> (i32, i32) {
     widget
@@ -421,14 +473,12 @@ fn widget_physical_size(widget: &tauri::WebviewWindow) -> (i32, i32) {
 ///
 /// Returns false when the shell offers nothing to dock to (no taskbar, auto-hide
 /// retracted, vertical taskbar); the caller then leaves the widget untouched.
-fn dock_widget_to_taskbar(widget: &tauri::WebviewWindow) -> bool {
+fn dock_widget_to_taskbar(widget: &tauri::WebviewWindow, db: &Database) -> bool {
     let (w, h) = widget_physical_size(widget);
-    let Some((x, y)) = taskbar::dock_position(w, h) else {
+    let Some((x, y)) = taskbar::dock_position(w, h, widget_dock_offset(db)) else {
         return false;
     };
 
-    // The taskbar is itself topmost, and within that band the most recently raised window
-    // wins. Re-assert on every move or the widget slides behind it.
     if widget
         .outer_position()
         .map(|p| p.x != x || p.y != y)
@@ -436,7 +486,14 @@ fn dock_widget_to_taskbar(widget: &tauri::WebviewWindow) -> bool {
     {
         let _ = widget.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
     }
-    let _ = widget.set_always_on_top(true);
+
+    // Renew the topmost claim unconditionally. Clicking the taskbar raises it above the
+    // widget without moving the widget, so doing this only on a position change would
+    // leave it buried. set_always_on_top is a no-op once the flag is already set, hence
+    // going straight to SetWindowPos.
+    if let Ok(hwnd) = widget.hwnd() {
+        taskbar::raise_topmost(hwnd.0 as _);
+    }
     true
 }
 
@@ -447,7 +504,7 @@ fn widget_preset(db: &Database) -> String {
 fn position_widget_window(widget: &tauri::WebviewWindow, db: &Database) {
     // Taskbar docking derives its position from the live shell geometry, so the saved
     // x/y below must not override it.
-    if widget_preset(db) == "taskbar" && dock_widget_to_taskbar(widget) {
+    if widget_preset(db) == "taskbar" && dock_widget_to_taskbar(widget, db) {
         return;
     }
 
@@ -488,11 +545,31 @@ fn position_widget_window(widget: &tauri::WebviewWindow, db: &Database) {
 }
 
 #[tauri::command]
-fn save_widget_position(state: State<AppState>, x: i32, y: i32) -> Result<(), String> {
-    // A docked widget is positioned by the shell geometry every tick; persisting a drag
-    // would only produce a coordinate that is immediately overwritten.
+fn save_widget_position(app: AppHandle, state: State<AppState>, x: i32, y: i32) -> Result<(), String> {
+    state.dock_drag.end();
+
+    // A drop while docked means one of two things, and the landing spot says which:
+    // still over the taskbar is a move along it, anywhere else is a request to undock.
     if widget_preset(&state.db) == "taskbar" {
-        return Ok(());
+        let size = app
+            .get_webview_window("widget")
+            .map(|w| widget_physical_size(&w))
+            .unwrap_or((220, 38));
+
+        match taskbar::dock_offset_for(x, y, size.0, size.1) {
+            Some(offset) => {
+                let _ = state.db.set_setting("widget_dock_x", &offset.to_string());
+                info!("[Widget] Moved along the taskbar to offset {}", offset);
+                // The tick puts it on the exact pixel; the free x/y below are not used
+                // while docked, so there is nothing more to persist.
+                return Ok(());
+            }
+            None => {
+                let _ = state.db.set_setting("widget_preset", "custom");
+                let _ = state.db.set_setting("widget_dock_x", "");
+                info!("[Widget] Dragged off the taskbar - undocked");
+            }
+        }
     }
 
     // Strict safety guard: reject negative coordinates (like -32000 on lock/sleep) or absurd numbers
@@ -507,6 +584,7 @@ fn save_widget_position(state: State<AppState>, x: i32, y: i32) -> Result<(), St
 fn reset_widget_position(app: AppHandle, state: State<AppState>) -> Result<(), String> {
     let _ = state.db.set_setting("widget_x", "");
     let _ = state.db.set_setting("widget_y", "");
+    let _ = state.db.set_setting("widget_dock_x", "");
     let _ = state.db.set_setting("taskbar_widget", "true");
     if let Some(widget) = app.get_webview_window("widget") {
         position_widget_window(&widget, &state.db);
@@ -542,7 +620,12 @@ fn save_widget_config(app: AppHandle, state: State<AppState>, config: WidgetConf
 }
 
 #[tauri::command]
-fn start_widget_drag(app: AppHandle) -> Result<(), String> {
+fn start_widget_drag(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+    // Only pause the re-dock tick here. Whether this drag moves the widget along the
+    // taskbar or lifts it off entirely is decided by where it lands, in
+    // save_widget_position.
+    state.dock_drag.begin();
+
     if let Some(widget) = app.get_webview_window("widget") {
         widget.start_dragging().map_err(|e| e.to_string())?;
     }
@@ -562,7 +645,7 @@ fn set_widget_preset(app: AppHandle, state: State<AppState>, preset: String) -> 
 
             if preset == "taskbar" {
                 state.db.set_setting("widget_preset", &preset)?;
-                if !dock_widget_to_taskbar(&widget) {
+                if !dock_widget_to_taskbar(&widget, &state.db) {
                     return Err("No horizontal taskbar found to dock to".to_string());
                 }
                 return Ok(());
@@ -936,6 +1019,7 @@ fn main() {
     // Blocking is enforced by the kernel where possible; the shaper keeps its own copy of
     // the block as the fallback for when WFP could not be opened.
     let wfp = Arc::new(WfpBlocker::new());
+    let dock_drag: Arc<DockDrag> = Arc::new(DockDrag::default());
 
     // Load existing persistent rules into Token Bucket Shaper and fast In-Memory Caches
     let app_rules_cache = Arc::new(DashMap::new());
@@ -1033,6 +1117,7 @@ fn main() {
         detector: detector.clone(),
         packet_engine: packet_engine.clone(),
         wfp: wfp.clone(),
+        dock_drag: dock_drag.clone(),
         driver_status: driver_status.clone(),
         app_rules_cache: app_rules_cache.clone(),
         stream_rules_cache: stream_rules_cache.clone(),
@@ -1114,8 +1199,13 @@ fn main() {
             {
                 let handle_for_dock = handle.clone();
                 let db_for_dock = db_ref.clone();
+                let drag_for_dock = app.state::<AppState>().dock_drag.clone();
                 std::thread::spawn(move || loop {
-                    std::thread::sleep(Duration::from_millis(1000));
+                    // Fast enough that being raised over by a taskbar click is not seen.
+                    std::thread::sleep(Duration::from_millis(400));
+                    if drag_for_dock.in_progress() {
+                        continue; // the user is holding it
+                    }
                     if db_for_dock.get_setting("widget_preset", "bottom-right") != "taskbar" {
                         continue;
                     }
@@ -1123,7 +1213,7 @@ fn main() {
                         continue;
                     }
                     if let Some(w) = handle_for_dock.get_webview_window("widget") {
-                        dock_widget_to_taskbar(&w);
+                        dock_widget_to_taskbar(&w, &db_for_dock);
                     }
                 });
             }
